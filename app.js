@@ -86,9 +86,7 @@ const pageTitles = {
 };
 
 function showPage(page) {
-  const currentPage = $('.page.active')?.id?.replace('page-', '');
-  if (currentPage && currentPage !== page && !window.confirm('هل أنت متأكد من الخروج من الصفحة الحالية؟')) return;
-  hasUnsavedChanges = false;
+  // التنقل بين صفحات التطبيق حرّ دون أي نافذة تأكيد
   $$('.page').forEach(p => p.classList.remove('active'));
   $('#page-' + page).classList.add('active');
   $$('.sidebar-menu a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
@@ -104,7 +102,72 @@ function showPage(page) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+// ============ حارس الخروج (زر الرجوع في المتصفح / الجوال) ============
+// يعمل بطريقة "المصيدة": نضيف خطوة في سجل المتصفح، فإذا ضغط المستخدم زر الرجوع
+// نُعيد إضافة خطوة مكانها فلا يغادر التطبيق، ونعرض رسالة من داخل التطبيق بنفس
+// تصميمه (وليست نافذة المتصفح المنبثقة) تسأله هل يريد الخروج فعلًا.
+let exitGuardActive = false;   // هل الحارس مفعّل الآن
+let allowLeave      = false;   // صار true بعد ضغط "الخروج" للسماح بالرجوع الحقيقي
+let exitDialogOpen  = false;   // هل رسالة الخروج ظاهرة حاليًا
+
+function installExitGuard() {
+  if (exitGuardActive || !window.history || !('pushState' in history)) return;
+  exitGuardActive = true;
+  // نعلّم صفحة التطبيق الحالية كـ "أرضية" التطبيق
+  try { history.replaceState({ ems: 'app-root' }, '', location.href); } catch (err) {}
+  // ثم نضيف خطوة وهمية فوقها: زر الرجوع سيبقى داخل التطبيق ولن يغادر قبل التأكيد
+  try { history.pushState({ ems: 'exit-guard' }, '', location.href); } catch (err) {}
+  window.addEventListener('popstate', onBackPressed);
+}
+
+// عند الضغط على زر الرجوع (أو إيماءة السحب للخلف في الجوال)
+function onBackPressed(e) {
+  if (allowLeave) {
+    // المستخدم وافق على الخروج → نتخطى خطواتنا الوهمية ونغادر فعلاً
+    const st = (e && e.state) || {};
+    if (st.ems === 'exit-guard' || st.ems === 'app-root') {
+      try { history.back(); } catch (err) { try { history.go(-1); } catch (_) {} }
+    }
+    return; // أي خطوة خارج خطواتنا: نترك المتصفح يكمل مغادرة التطبيق
+  }
+  // نستعيد الخطوة الوهمية حتى لا نغادر التطبيق قبل التأكيد
+  try { history.pushState({ ems: 'exit-guard' }, '', location.href); } catch (err) {}
+
+  // إذا كانت نافذة تعديل/إدخال مفتوحة: زر الرجوع يغلقها أولًا (سلوك طبيعي)
+  const editingModal = [...$$('.modal.open')].find(m => m.id !== 'exit-modal');
+  if (editingModal) { closeModal(editingModal.id); return; }
+
+  // وإلا: اعرض رسالة الخروج من داخل التطبيق
+  showExitDialog();
+}
+
+// إظهار رسالة الخروج (نافذة داخلية بتصميم التطبيق)
+function showExitDialog() {
+  if (exitDialogOpen) return;
+  exitDialogOpen = true;
+  openModal('exit-modal');
+}
+
+// المستخدم اختار البقاء → نغلق الرسالة ونبقى في التطبيق
+function cancelExit() {
+  exitDialogOpen = false;
+  closeModal('exit-modal');
+}
+
+// المستخدم أكّد رغبته في الخروج → نسمح له بالرجوع فعلًا
+function confirmExit() {
+  exitDialogOpen = false;
+  closeModal('exit-modal');
+  allowLeave = true;
+  // نبدأ الرجوع؛ ومُعامِل popstate (onBackPressed) يتخطى خطواتنا الوهمية
+  // ويكمل حتى مغادرة التطبيق إلى الصفحة التي كانت قبله.
+  try { history.back(); } catch (err) { window.location.href = document.referrer || 'about:blank'; }
+}
+
+// حماية خفيفة عند التحديث/الإغلاق مع وجود تعديلات غير محفوظة فقط
+// (تُلغى تلقائيًا عند الموافقة على الخروج حتى لا تظهر نافذة المتصفح مرتين)
 window.addEventListener('beforeunload', e => {
+  if (allowLeave || !hasUnsavedChanges) return;
   e.preventDefault();
   e.returnValue = '';
 });
@@ -676,7 +739,11 @@ function executeConfirm() {
   if (confirmCallback) { confirmCallback(); confirmCallback = null; }
 }
 
-$$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
+$$('.modal').forEach(m => m.addEventListener('click', e => {
+  if (e.target !== m) return;
+  if (m.id === 'exit-modal') { cancelExit(); return; } // إغلاق رسالة الخروج = البقاء
+  closeModal(m.id);
+}));
 
 // ============ النسخ الاحتياطي ============
 function exportAllData() {
@@ -748,7 +815,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.5').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.6').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
@@ -759,6 +826,7 @@ if ('serviceWorker' in navigator) {
 
 // ============ التهيئة ============
 document.addEventListener('DOMContentLoaded', () => {
+  installExitGuard();
   fillMonthYearSelectors();
   updateCompanyBranding();
   const d = new Date();

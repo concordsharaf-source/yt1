@@ -360,6 +360,25 @@ textarea.form-input { resize: vertical; }
   border-top: 1px solid var(--border);
 }
 
+/* ===== نافذة حارس الخروج (داخل التطبيق) ===== */
+#exit-modal .modal-content { text-align: center; max-width: 360px; }
+#exit-modal .exit-icon {
+  font-size: 3rem; line-height: 1; margin: 1.5rem auto 0.25rem;
+}
+#exit-modal .exit-header h3 {
+  color: var(--primary); font-size: 1.2rem; margin: 0.25rem 0 0;
+  background: none; border: none; padding: 0;
+}
+#exit-modal .exit-body { padding: 0.25rem 1.5rem 0.75rem; }
+#exit-modal .exit-body p { margin: 0.35rem 0; color: var(--text); font-size: 1rem; }
+#exit-modal .exit-body .exit-hint { color: var(--text-light); font-size: 0.85rem; }
+#exit-modal .exit-actions {
+  justify-content: center; border-top: 1px solid var(--border);
+  padding: 1rem 1.25rem 1.5rem;
+  display: flex; flex-wrap: wrap; gap: 0.75rem;
+}
+#exit-modal .exit-actions .btn { min-width: 130px; padding: 0.65rem 1rem; }
+
 .net-preview {
   margin: 0 1.25rem 1.25rem;
   padding: 1rem;

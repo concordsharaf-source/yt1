@@ -535,6 +535,24 @@
   </div>
 </div>
 
+<!-- نافذة حارس الخروج: رسالة من داخل التطبيق عند محاولة الخروج بزر الرجوع -->
+<div class="modal exit-modal" id="exit-modal" role="dialog" aria-modal="true">
+  <div class="modal-content modal-small">
+    <div class="exit-icon" aria-hidden="true">👋</div>
+    <div class="exit-header">
+      <h3>مغادرة التطبيق؟</h3>
+    </div>
+    <div class="exit-body">
+      <p>هل أنت متأكد من أنك تريد الخروج من التطبيق؟</p>
+      <p class="exit-hint">بياناتك محفوظة على جهازك ولن تُفقد عند العودة.</p>
+    </div>
+    <div class="modal-footer exit-actions">
+      <button class="btn btn-outline" onclick="cancelExit()">البقاء في التطبيق</button>
+      <button class="btn btn-danger" onclick="confirmExit()">نعم، الخروج</button>
+    </div>
+  </div>
+</div>
+
 <!-- إشعارات -->
 <div id="toast-container"></div>
 
