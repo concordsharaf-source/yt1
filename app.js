@@ -2,7 +2,7 @@
 'use strict';
 
 // ============ إدارة البيانات ============
-const DB_KEYS = { EMPLOYEES: 'ems_employees', EXPENSES: 'ems_expenses', SETTINGS: 'ems_settings', PAYROLL: 'ems_payroll' };
+const DB_KEYS = { EMPLOYEES: 'ems_employees', EXPENSES: 'ems_expenses', REVENUES: 'ems_revenues', SETTINGS: 'ems_settings', PAYROLL: 'ems_payroll' };
 
 function loadData(key, defaultVal = []) {
   try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : defaultVal; }
@@ -12,6 +12,7 @@ function saveData(key, data) { localStorage.setItem(key, JSON.stringify(data)); 
 
 let employees = loadData(DB_KEYS.EMPLOYEES);
 let expenses  = loadData(DB_KEYS.EXPENSES);
+let revenues  = loadData(DB_KEYS.REVENUES);
 let settings  = loadData(DB_KEYS.SETTINGS, {
   companyName: 'مؤسستي', taxNumber: '', phone: '', address: '',
   currency: 'ر.س', monthlyIncome: 0, logo: ''
@@ -33,6 +34,10 @@ function fmt(n) {
 function monthKey(y, m) { return `${y}-${String(m).padStart(2,'0')}`; }
 function curMonthKey() { const d = new Date(); return monthKey(d.getFullYear(), d.getMonth() + 1); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function revenueTotalForMonth(mk) {
+  const list = revenues.filter(x => x.date?.startsWith(mk));
+  return list.length ? list.reduce((sum, x) => sum + Number(x.amount || 0), 0) : Number(settings.monthlyIncome || 0);
+}
 
 function toast(msg, type = 'success') {
   const t = document.createElement('div');
@@ -72,7 +77,7 @@ function calcEmployeeNet(emp, monthData = {}) {
 // ============ التنقل ============
 const pageTitles = {
   dashboard: 'لوحة التحكم', employees: 'الموظفون', payroll: 'مسير الرواتب',
-  expenses: 'النفقات التشغيلية', reports: 'التقارير المالية', settings: 'الإعدادات'
+  expenses: 'النفقات التشغيلية', revenues: 'بنود الإيرادات', reports: 'التقارير المالية', settings: 'الإعدادات'
 };
 
 function showPage(page) {
@@ -85,6 +90,7 @@ function showPage(page) {
   if (page === 'employees') renderEmployees();
   if (page === 'payroll')   renderPayroll();
   if (page === 'expenses')  renderExpenses();
+  if (page === 'revenues')  renderRevenues();
   if (page === 'reports')   renderReports();
   if (page === 'settings')  loadSettingsForm();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -112,7 +118,7 @@ function renderDashboard() {
   const totalExp = monthExp.reduce((s, x) => s + Number(x.amount || 0), 0);
   $('#stat-expenses').textContent = fmt(totalExp);
 
-  const income = Number(settings.monthlyIncome || 0);
+  const income = revenueTotalForMonth(mk);
   $('#stat-net').textContent = fmt(income - totalSalaries - totalExp);
 
   const recent = [...employees].slice(-5).reverse();
@@ -309,7 +315,7 @@ function fillMonthYearSelectors() {
   const years = [];
   for (let y = now.getFullYear() - 3; y <= now.getFullYear() + 1; y++) years.push(y);
   const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-  ['payroll','expense','report'].forEach(p => {
+  ['payroll','expense','revenue','report'].forEach(p => {
     const ms = $(`#${p}-month`), ys = $(`#${p}-year`);
     if (!ms) return;
     ms.innerHTML = months.map((m, i) => `<option value="${i+1}" ${i === now.getMonth() ? 'selected' : ''}>${m}</option>`).join('');
@@ -465,6 +471,62 @@ function deleteExpense(id) {
   });
 }
 
+// ============ الإيرادات ==========
+function renderRevenues() {
+  const mk = getSelectedMonth('revenue');
+  const list = revenues.filter(x => x.date?.startsWith(mk)).sort((a, b) => b.date.localeCompare(a.date));
+  const total = list.reduce((sum, x) => sum + Number(x.amount || 0), 0);
+  $('#revenue-total').textContent = fmt(list.length ? total : revenueTotalForMonth(mk));
+  $('#revenue-count').textContent = list.length;
+  $('#revenue-categories').textContent = new Set(list.map(x => x.category)).size;
+  $('#revenues-table').innerHTML = list.length ? list.map(x => `
+    <tr><td>${esc(x.date)}</td><td><span class="badge badge-monthly">${esc(x.category)}</span></td>
+      <td>${esc(x.description)}</td><td class="amount amount-positive">${fmt(x.amount)}</td>
+      <td>${esc(x.notes || '—')}</td><td>
+        <button class="btn btn-sm btn-info btn-icon" onclick="editRevenue('${x.id}')">✏️</button>
+        <button class="btn btn-sm btn-danger btn-icon" onclick="deleteRevenue('${x.id}')">🗑️</button>
+      </td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#999;padding:2rem">لا توجد إيرادات مسجلة هذا الشهر</td></tr>';
+}
+
+function openRevenueModal(id = null) {
+  const rev = id ? revenues.find(x => x.id === id) : null;
+  $('#revenue-modal-title').textContent = rev ? 'تعديل بند إيراد' : 'إضافة بند إيراد';
+  $('#rev-id').value = rev?.id || '';
+  $('#rev-date').value = rev?.date || new Date().toISOString().slice(0, 10);
+  $('#rev-category').value = rev?.category || 'مبيعات';
+  $('#rev-description').value = rev?.description || '';
+  $('#rev-amount').value = rev?.amount ?? '';
+  $('#rev-notes').value = rev?.notes || '';
+  openModal('revenue-modal');
+}
+
+function saveRevenue() {
+  const id = $('#rev-id').value || 'rev_' + Date.now();
+  const date = $('#rev-date').value;
+  const description = $('#rev-description').value.trim();
+  const amount = Number($('#rev-amount').value || 0);
+  if (!date || !description || !amount) { toast('يرجى ملء حقول الإيراد المطلوبة', 'error'); return; }
+  const rev = { id, date, category: $('#rev-category').value, description, amount, notes: $('#rev-notes').value.trim() };
+  const idx = revenues.findIndex(x => x.id === id);
+  if (idx >= 0) revenues[idx] = rev; else revenues.push(rev);
+  saveData(DB_KEYS.REVENUES, revenues);
+  closeModal('revenue-modal');
+  renderRevenues(); renderDashboard();
+  if ($('#page-reports').classList.contains('active')) renderReports();
+  toast(idx >= 0 ? 'تم تحديث بند الإيراد ✅' : 'تمت إضافة الإيراد ✅');
+}
+
+function editRevenue(id) { openRevenueModal(id); }
+function deleteRevenue(id) {
+  showConfirm('هل أنت متأكد من حذف بند الإيراد؟', () => {
+    revenues = revenues.filter(x => x.id !== id);
+    saveData(DB_KEYS.REVENUES, revenues);
+    renderRevenues(); renderDashboard();
+    if ($('#page-reports').classList.contains('active')) renderReports();
+    toast('تم حذف بند الإيراد', 'warning');
+  });
+}
+
 // ============ التقارير ============
 function renderReports() {
   const mk = getSelectedMonth('report');
@@ -472,8 +534,12 @@ function renderReports() {
   const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   $('#report-period').textContent = `عن شهر ${months[Number(m)-1]} من عام ${y} — ${settings.companyName}`;
 
-  const income = Number(settings.monthlyIncome || 0);
+  const income = revenueTotalForMonth(mk);
   $('#rep-income').textContent = fmt(income);
+  const monthRevenues = revenues.filter(x => x.date?.startsWith(mk));
+  $('#rep-revenue-details').innerHTML = monthRevenues.length
+    ? monthRevenues.map(x => `<div class="expense-detail-row"><span>${esc(x.description)} — ${esc(x.category)}</span><span class="amount amount-positive">${fmt(x.amount)}</span></div>`).join('')
+    : '<div class="expense-detail-row"><span>لا توجد بنود إيرادات مفصلة — يتم استخدام الإيراد التقديري من الإعدادات</span><span>—</span></div>';
 
   const md = payrollData[mk] || {};
   let totBase = 0, totGross = 0, totBonus = 0, totAllow = 0, totTax = 0, totAfterTax = 0, totAdv = 0, totDed = 0, totNet = 0;
@@ -592,7 +658,7 @@ $$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m)
 
 // ============ النسخ الاحتياطي ============
 function exportAllData() {
-  const data = { employees, expenses, settings, payrollData, exportedAt: new Date().toISOString(), app: 'EMS v1.0' };
+  const data = { employees, expenses, revenues, settings, payrollData, exportedAt: new Date().toISOString(), app: 'EMS v1.1' };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -611,9 +677,9 @@ function importData(input) {
       const d = JSON.parse(e.target.result);
       if (!d.employees || !d.expenses) throw new Error('ملف غير صالح');
       showConfirm('سيتم استبدال جميع البيانات الحالية بالبيانات المستوردة. هل تريد المتابعة؟', () => {
-        employees = d.employees; expenses = d.expenses;
+        employees = d.employees; expenses = d.expenses; revenues = d.revenues || [];
         settings = d.settings || settings; payrollData = d.payrollData || {};
-        saveData(DB_KEYS.EMPLOYEES, employees); saveData(DB_KEYS.EXPENSES, expenses);
+        saveData(DB_KEYS.EMPLOYEES, employees); saveData(DB_KEYS.EXPENSES, expenses); saveData(DB_KEYS.REVENUES, revenues);
         saveData(DB_KEYS.SETTINGS, settings); saveData(DB_KEYS.PAYROLL, payrollData);
         renderDashboard();
         toast('تم استيراد البيانات بنجاح ✅');
@@ -628,9 +694,10 @@ function clearAllData() {
   showConfirm('⚠️ تحذير: سيتم مسح جميع البيانات نهائياً (الموظفون، النفقات، الإعدادات). هل أنت متأكد؟', () => {
     localStorage.removeItem(DB_KEYS.EMPLOYEES);
     localStorage.removeItem(DB_KEYS.EXPENSES);
+    localStorage.removeItem(DB_KEYS.REVENUES);
     localStorage.removeItem(DB_KEYS.SETTINGS);
     localStorage.removeItem(DB_KEYS.PAYROLL);
-    employees = []; expenses = []; payrollData = {};
+    employees = []; expenses = []; revenues = []; payrollData = {};
     settings = { companyName: 'مؤسستي', taxNumber: '', phone: '', address: '', currency: 'ر.س', monthlyIncome: 0, logo: '' };
     pendingCompanyLogo = null;
     updateCompanyBranding();

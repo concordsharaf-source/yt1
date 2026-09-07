@@ -41,6 +41,7 @@
     <li><a href="#" onclick="showPage('employees');return false" data-page="employees">👥 الموظفون</a></li>
     <li><a href="#" onclick="showPage('payroll');return false" data-page="payroll">💰 مسير الرواتب</a></li>
     <li><a href="#" onclick="showPage('expenses');return false" data-page="expenses">🧾 النفقات التشغيلية</a></li>
+    <li><a href="#" onclick="showPage('revenues');return false" data-page="revenues">📥 بنود الإيرادات</a></li>
     <li><a href="#" onclick="showPage('reports');return false" data-page="reports">📈 التقارير المالية</a></li>
     <li><a href="#" onclick="showPage('settings');return false" data-page="settings">⚙️ الإعدادات</a></li>
   </ul>
@@ -195,6 +196,28 @@
     </div>
   </section>
 
+  <!-- الإيرادات -->
+  <section id="page-revenues" class="page">
+    <div class="page-actions">
+      <select id="revenue-month" class="form-select" onchange="renderRevenues()"></select>
+      <select id="revenue-year" class="form-select" onchange="renderRevenues()"></select>
+      <button class="btn btn-success" onclick="openRevenueModal()">➕ إضافة إيراد</button>
+    </div>
+    <div class="stats-grid stats-3">
+      <div class="stat-card stat-green"><div class="stat-icon">📥</div><div class="stat-info"><div class="stat-value" id="revenue-total">0</div><div class="stat-label">إجمالي إيرادات الشهر</div></div></div>
+      <div class="stat-card stat-blue"><div class="stat-icon">📋</div><div class="stat-info"><div class="stat-value" id="revenue-count">0</div><div class="stat-label">عدد البنود</div></div></div>
+      <div class="stat-card stat-purple"><div class="stat-icon">📊</div><div class="stat-info"><div class="stat-value" id="revenue-categories">0</div><div class="stat-label">عدد الفئات</div></div></div>
+    </div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead><tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>المبلغ</th><th>ملاحظات</th><th>إجراءات</th></tr></thead>
+          <tbody id="revenues-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <!-- التقارير -->
   <section id="page-reports" class="page">
     <div class="page-actions">
@@ -212,6 +235,7 @@
 
       <div class="report-section">
         <h3>📥 الإيرادات</h3>
+        <div id="rep-revenue-details"></div>
         <div class="report-row"><span>إجمالي الإيرادات المسجلة:</span><strong id="rep-income">0</strong></div>
       </div>
 
@@ -447,6 +471,24 @@
       <button class="btn btn-outline" onclick="closeModal('expense-modal')">إلغاء</button>
       <button class="btn btn-primary" onclick="saveExpense()">💾 حفظ النفقة</button>
     </div>
+  </div>
+</div>
+
+<!-- نافذة إضافة إيراد -->
+<div class="modal" id="revenue-modal">
+  <div class="modal-content">
+    <div class="modal-header"><h3 id="revenue-modal-title">إضافة بند إيراد</h3><button class="modal-close" onclick="closeModal('revenue-modal')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="rev-id">
+      <div class="form-grid">
+        <div class="form-group"><label>التاريخ *</label><input type="date" id="rev-date" class="form-input" required></div>
+        <div class="form-group"><label>الفئة *</label><select id="rev-category" class="form-select"><option value="مبيعات">مبيعات</option><option value="خدمات">خدمات</option><option value="مشاريع">مشاريع</option><option value="عمولات">عمولات</option><option value="أخرى">أخرى</option></select></div>
+        <div class="form-group"><label>الوصف *</label><input type="text" id="rev-description" class="form-input" placeholder="مثال: مبيعات شهرية" required></div>
+        <div class="form-group"><label>المبلغ *</label><input type="number" id="rev-amount" class="form-input" min="0" step="0.01" required></div>
+        <div class="form-group full-width"><label>ملاحظات</label><textarea id="rev-notes" class="form-input" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('revenue-modal')">إلغاء</button><button class="btn btn-success" onclick="saveRevenue()">💾 حفظ الإيراد</button></div>
   </div>
 </div>
 
