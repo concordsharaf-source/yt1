@@ -532,6 +532,23 @@
   </div>
 </div>
 
+<!-- نافذة عرض تفاصيل الموظف -->
+<div class="modal" id="employee-details-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="employee-details-title">تفاصيل الموظف</h3>
+      <button class="modal-close" onclick="closeModal('employee-details-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="employee-details-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="employee-details-edit" onclick="editEmployeeFromDetails()">✏️ تعديل</button>
+      <button class="btn btn-outline" onclick="closeModal('employee-details-modal')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <!-- نافذة تأكيد -->
 <div class="modal" id="confirm-modal">
   <div class="modal-content modal-small">

@@ -345,6 +345,7 @@ function renderEmployees() {
         <div class="employee-name-wrap">
           <button class="employee-name-button" onclick="toggleEmployeeActions('${e.id}')" title="إضافة حركة مالية"><strong>${esc(e.name)}</strong><span>⌄</span></button>
           <div class="employee-actions-menu" data-employee-actions="${e.id}">
+            <button onclick="openEmployeeDetails('${e.id}')">📋 التفاصيل</button>
             <button onclick="openEmployeeTransaction('${e.id}','advance')">💸 سلفة</button>
             <button onclick="openEmployeeTransaction('${e.id}','deduction')">➖ خصم</button>
             <button onclick="openEmployeeTransaction('${e.id}','bonus')">🎁 حافز</button>
@@ -394,6 +395,75 @@ function pickPhoneContact() {
   } catch (e) {
     toast('اختيار جهات الاتصال غير متاح في هذا المتصفح', 'warning');
   }
+}
+
+let detailsEmpId = null; // الموظف الذي تُعرض تفاصيله حالياً
+
+// صف معلومة داخل نافذة التفاصيل
+function detailRow(label, value, highlight = false) {
+  return `<div class="detail-row${highlight ? ' detail-row-total' : ''}"><span class="detail-label">${esc(label)}</span><span class="detail-value">${value ?? '—'}</span></div>`;
+}
+
+// عرض جميع تفاصيل الموظف
+function openEmployeeDetails(empId) {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  detailsEmpId = empId;
+  const mk = curMonthKey();
+  const c = calcEmployeeNet(emp, payrollData[mk]?.[empId]);
+  const typeName = emp.type === 'piece' ? '🔢 بالقطعة' : '📅 شهري';
+
+  // حركات الشهر المسجلة (سلفة/خصم/حافز)
+  const txList = (payrollData[mk]?.[empId]?.transactions) || [];
+  const txHtml = txList.length ? txList.slice(-8).reverse().map(tx => {
+    const lbl = tx.type === 'advance' ? 'سلفة' : tx.type === 'deduction' ? 'خصم' : 'حافز';
+    return `<div class="detail-row"><span class="detail-label">${lbl} ${tx.note ? '(' + esc(tx.note) + ')' : ''}</span><span class="detail-value">${fmt(tx.amount)}</span></div>`;
+  }).join('') : '<div class="detail-row"><span class="detail-label" style="color:#999">لا توجد حركات لهذا الشهر</span></div>';
+
+  const baseVal = emp.type === 'piece'
+    ? `${fmt(emp.piecePrice)} / قطعة`
+    : fmt(emp.salary);
+
+  $('#employee-details-title').textContent = `تفاصيل: ${emp.name}`;
+  $('#employee-details-content').innerHTML = `
+    <div class="details-section">${typeName}</div>
+
+    <div class="detail-group">
+      ${detailRow('المسمى الوظيفي', esc(emp.title || '—'))}
+      ${detailRow('رقم الهاتف', esc(emp.phone || '—'))}
+      ${detailRow('تاريخ التعيين', esc(emp.hireDate || '—'))}
+      ${detailRow('نسبة الضريبة', (c.taxRate || 0) + '%')}
+      ${emp.type === 'piece'
+        ? detailRow('سعر القطعة', fmt(emp.piecePrice))
+        : detailRow('الراتب الشهري (صافي)', fmt(emp.salary))}
+      ${detailRow('نوع الحساب', typeName)}
+      ${detailRow('ملاحظات', emp.notes ? esc(emp.notes) : '—')}
+    </div>
+
+    <div class="details-section">حساب الشهر الحالي</div>
+    <div class="detail-group">
+      ${detailRow('أساس الاستحقاق', baseVal)}
+      ${detailRow('عدد القطع/الإضافية', c.pieces || 0)}
+      ${detailRow('إجمالي القطع', fmt(c.pieceTotal))}
+      ${detailRow('قبل الضريبة (الإجمالي)', fmt(c.gross))}
+      ${detailRow('الحوافز', fmt(c.bonus))}
+      ${detailRow('البدلات', fmt(c.allowance))}
+      ${detailRow('الضريبة', fmt(c.tax))}
+      ${detailRow('السلف', fmt(c.advance))}
+      ${detailRow('الخصومات/الأقساط', fmt(c.deduction))}
+      ${detailRow('صافي المستحق', fmt(c.net), true)}
+    </div>
+
+    <div class="details-section">حركات الشهر</div>
+    <div class="detail-group">${txHtml}</div>
+  `;
+  closeSidebar();
+  openModal('employee-details-modal');
+}
+
+function editEmployeeFromDetails() {
+  closeModal('employee-details-modal');
+  if (detailsEmpId) openEmployeeModal(detailsEmpId);
 }
 
 function openEmployeeTransaction(empId, type = 'advance') {
@@ -960,7 +1030,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=2.4').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=2.5').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
