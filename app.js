@@ -205,6 +205,43 @@ document.addEventListener('change', e => {
   if (e.target.closest('.modal') || e.target.closest('#page-settings')) hasUnsavedChanges = true;
 });
 
+// عند وضع المؤشر على أي خانة رقمية ثم الكتابة: يُستبدل الرقم القديم مباشرةً
+// (لأن حقول type=number لا تدعم تحديد النص، فنجعل أول ضغطة تمحو القيمة القديمة)
+let numericFreshField = null; // الحقل الرقمي الذي نُقِل إليه التركوز للتو
+
+document.addEventListener('focusin', e => {
+  const t = e.target;
+  if (t && t.tagName === 'INPUT' && t.type === 'number') {
+    numericFreshField = t;
+  }
+});
+
+document.addEventListener('keydown', e => {
+  const t = e.target;
+  if (!t || t !== numericFreshField) return;
+  if (t.tagName !== 'INPUT' || t.type !== 'number') { numericFreshField = null; return; }
+  // مفاتيح التنقل والتعديل لا تُفرّغ بل تُدخل على الوضع العادي
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'ArrowLeft' ||
+      e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' ||
+      e.key === 'Tab' || e.key === 'Enter' || e.key === 'Home' || e.key === 'End') {
+    numericFreshField = null;
+    return;
+  }
+  // أول إدخال رقمي/علامة يمحو القيمة القديمة ثم يُدخل الحرف
+  if (e.key.length === 1 && /^[0-9.\-]$/.test(e.key)) {
+    e.preventDefault();
+    t.value = e.key;
+    numericFreshField = null;
+  }
+});
+
+document.addEventListener('mouseup', e => {
+  // نقر إضافي داخل الحقل لإلغاء "الإفراغ" والسماح بالتعديل الدقيق
+  const t = e.target;
+  if (t && numericFreshField && t !== numericFreshField) numericFreshField = null;
+});
+
 function toggleSidebar() {
   $('#sidebar').classList.toggle('open');
   $('#sidebar-overlay').classList.toggle('show');
@@ -923,7 +960,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=2.3').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=2.4').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
