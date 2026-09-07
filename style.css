@@ -336,6 +336,9 @@ body {
   background: #fff;
   transition: border-color 0.2s;
 }
+/* حقول المبالغ (فاصل آلاف + أرقام لاتينية): اتجاه لاتيني صحيح */
+.money-input { direction: ltr; text-align: right; unicode-bidi: plaintext; }
+
 /* خانة رقم الهاتف مع زر جهات الاتصال */
 .phone-wrap { position: relative; }
 .phone-wrap .form-input { padding-inline-start: 3rem; }

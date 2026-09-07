@@ -211,8 +211,12 @@ let numericFreshField = null; // الحقل الرقمي الذي نُقِل إ�
 
 document.addEventListener('focusin', e => {
   const t = e.target;
-  if (t && t.tagName === 'INPUT' && t.type === 'number') {
-    numericFreshField = t;
+  if (!t || t.tagName !== 'INPUT') return;
+  if (t.type === 'number') { numericFreshField = t; return; }
+  // حقول المبالغ النصية: عند التركيز يتم تحديد القيمة كاملة لسهولة استبدالها
+  if (t.classList && t.classList.contains('money-input')) {
+    // تحديد القيمة كاملة فوراً عند التركيز حتى تُستبدل بأول حرف يُكتب
+    try { t.select(); } catch (err) {}
   }
 });
 
@@ -240,6 +244,47 @@ document.addEventListener('mouseup', e => {
   // نقر إضافي داخل الحقل لإلغاء "الإفراغ" والسماح بالتعديل الدقيق
   const t = e.target;
   if (t && numericFreshField && t !== numericFreshField) numericFreshField = null;
+});
+
+// ====== حقول المبالغ: فاصل آلاف تلقائي (فاصلة ,) كل 3 أرقام مع كسور عشرية ======
+// تُخزَّن في حقول نصية (money-input) تعرض فاصلة الآلاف أثناء الكتابة.
+// عند القراءة نستخدم toNum() لتجريد القيمة من الفواصل.
+
+// تحويل أي قيمة إلى رقم (بتجاهل فواصل الآلاف)
+function toNum(v) {
+  if (v == null) return 0;
+  const s = String(v).replace(/,/g, '').trim();
+  const n = Number(s);
+  return isNaN(n) ? 0 : n;
+}
+
+// تنسيق نص حقل مبلغ: مجموعة آلاف بفاصلة + نقطة عشرية واحدة
+function fmtMoneyInputText(s) {
+  if (s == null) return '';
+  s = String(s);
+  const dotIdx = s.indexOf('.');
+  let intPart, frac = '', hadDot = false;
+  if (dotIdx >= 0) { hadDot = true; intPart = s.slice(0, dotIdx); frac = s.slice(dotIdx + 1).replace(/[^0-9]/g, ''); }
+  else { intPart = s; }
+  intPart = intPart.replace(/[^0-9]/g, '');
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return hadDot ? grouped + '.' + frac : grouped;
+}
+
+// تنسيق قيم حقول المبالغ الموجودة داخل نطاق معيّن (scope)
+function formatMoneyScope(scope) {
+  (scope || document).querySelectorAll('.money-input').forEach(el => {
+    const f = fmtMoneyInputText(el.value);
+    if (el.value !== f) el.value = f;
+  });
+}
+
+// أثناء الكتابة: ننسّق فاصلة الآلاف فورياً
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!el || !(el.classList && el.classList.contains('money-input'))) return;
+  const f = fmtMoneyInputText(el.value);
+  if (el.value !== f) el.value = f;
 });
 
 function toggleSidebar() {
@@ -483,7 +528,7 @@ function openEmployeeTransaction(empId, type = 'advance') {
 function saveEmployeeTransaction() {
   const empId = $('#transaction-employee-id').value;
   const type = $('#transaction-type').value;
-  const amount = Number($('#transaction-amount').value || 0);
+  const amount = toNum($('#transaction-amount').value);
   if (!empId || !amount || amount < 0) { toast('يرجى إدخال مبلغ صحيح', 'error'); return; }
   const mk = curMonthKey();
   if (!payrollData[mk]) payrollData[mk] = {};
@@ -518,6 +563,7 @@ function openEmployeeModal(id = null) {
   const type = emp?.type || 'monthly';
   $$('input[name="emp-type"]').forEach(r => r.checked = r.value === type);
   toggleEmpType();
+  formatMoneyScope($('#employee-modal'));
   updateNetPreview();
   openModal('employee-modal');
   setTimeout(() => $('#emp-name').focus(), 100);
@@ -535,11 +581,11 @@ function updateNetPreview() {
   const type = document.querySelector('input[name="emp-type"]:checked').value;
   const emp = {
     type,
-    salary: Number($('#emp-salary').value || 0),
-    piecePrice: Number($('#emp-piece-price').value || 0),
-    taxRate: Number($('#emp-tax-rate').value || 0),
-    bonus: Number($('#emp-bonus').value || 0),
-    allowance: Number($('#emp-allowance').value || 0),
+    salary: toNum($('#emp-salary').value),
+    piecePrice: toNum($('#emp-piece-price').value),
+    taxRate: toNum($('#emp-tax-rate').value),
+    bonus: toNum($('#emp-bonus').value),
+    allowance: toNum($('#emp-allowance').value),
   };
   const c = calcEmployeeNet(emp);
   $('#emp-net-preview').textContent = type === 'piece'
@@ -562,11 +608,11 @@ function saveEmployee() {
     id, name, title, type,
     phone: $('#emp-phone').value.trim(),
     hireDate: $('#emp-hire-date').value,
-    salary: type === 'monthly' ? Number($('#emp-salary').value || 0) : 0,
-    piecePrice: Number($('#emp-piece-price').value || 0),
-    taxRate: Math.min(100, Math.max(0, Number($('#emp-tax-rate').value || 0))),
-    bonus: Number($('#emp-bonus').value || 0),
-    allowance: Number($('#emp-allowance').value || 0),
+    salary: type === 'monthly' ? toNum($('#emp-salary').value) : 0,
+    piecePrice: toNum($('#emp-piece-price').value),
+    taxRate: Math.min(100, Math.max(0, toNum($('#emp-tax-rate').value))),
+    bonus: toNum($('#emp-bonus').value),
+    allowance: toNum($('#emp-allowance').value),
     notes: $('#emp-notes').value.trim(),
     updatedAt: new Date().toISOString()
   };
@@ -629,11 +675,11 @@ function renderPayroll() {
     // سعر القطعة قابل للكتابة في المسير، ويُحفظ خاصاً بالشهر (لا يغيّر الأساسي)
     const monthPiecePrice = (d.piecePrice != null) ? d.piecePrice : e.piecePrice;
     const pieceCell = `<td><input type="number" min="0" class="form-input payroll-input" value="${d[pieceField] ?? ''}" placeholder="0" onchange="updatePayrollField('${e.id}','${pieceField}',this.value)"></td>
-         <td><input type="number" min="0" step="0.01" class="form-input payroll-input" value="${monthPiecePrice != null ? monthPiecePrice : ''}" placeholder="0" onchange="updatePayrollField('${e.id}','piecePrice',this.value)"></td>
+         <td><input type="text" inputmode="decimal" class="form-input payroll-input money-input" value="${monthPiecePrice != null ? monthPiecePrice : ''}" placeholder="0" onchange="updatePayrollField('${e.id}','piecePrice',this.value)"></td>
          <td class="amount cell-piecetotal">${fmt(c.pieceTotal)}</td>`;
     const deductionCell = e.type === 'monthly'
       ? `<select class="form-select payroll-input" onchange="updatePayrollField('${e.id}','installments',this.value)">${[0,1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}" ${(d.installments ?? e.installments ?? 0) == n ? 'selected' : ''}>${n === 0 ? 'بدون قسط' : n + ' قسط'}</option>`).join('')}</select>`
-      : `<input type="number" min="0" class="form-input payroll-input" value="${d.deduction ?? 0}" onchange="updatePayrollField('${e.id}','deduction',this.value)">`;
+      : `<input type="text" inputmode="decimal" class="form-input payroll-input money-input" value="${d.deduction ?? 0}" onchange="updatePayrollField('${e.id}','deduction',this.value)">`;
 
     return `<tr data-emp="${e.id}">
       <td>${i + 1}</td>
@@ -644,14 +690,15 @@ function renderPayroll() {
       <td class="amount cell-gross">${fmt(c.gross)}</td>
       <td class="amount">${c.taxRate}%</td>
       <td class="amount amount-negative cell-tax">${fmt(c.tax)}</td>
-      <td><input type="number" min="0" class="form-input payroll-input" value="${d.bonus ?? e.bonus ?? 0}" onchange="updatePayrollField('${e.id}','bonus',this.value)"></td>
-      <td><input type="number" min="0" class="form-input payroll-input" value="${d.allowance ?? e.allowance ?? 0}" onchange="updatePayrollField('${e.id}','allowance',this.value)"></td>
-      <td><input type="number" min="0" class="form-input payroll-input" value="${d.advance ?? 0}" onchange="updatePayrollField('${e.id}','advance',this.value)"></td>
+      <td><input type="text" inputmode="decimal" class="form-input payroll-input money-input" value="${d.bonus ?? e.bonus ?? 0}" onchange="updatePayrollField('${e.id}','bonus',this.value)"></td>
+      <td><input type="text" inputmode="decimal" class="form-input payroll-input money-input" value="${d.allowance ?? e.allowance ?? 0}" onchange="updatePayrollField('${e.id}','allowance',this.value)"></td>
+      <td><input type="text" inputmode="decimal" class="form-input payroll-input money-input" value="${d.advance ?? 0}" onchange="updatePayrollField('${e.id}','advance',this.value)"></td>
       <td>${deductionCell}</td>
       <td class="amount cell-net" style="color:var(--primary);font-weight:700">${fmt(c.net)}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="15" style="text-align:center;color:#999;padding:2rem">لا يوجد موظفون — أضف موظفين أولاً</td></tr>';
 
+  formatMoneyScope($('#payroll-body'));
   refreshPayrollNumbers();
 }
 
@@ -663,9 +710,9 @@ function updatePayrollField(empId, field, value) {
   if (field === 'piecePrice') {
     // ترك الحقل فارغاً = استخدام سعر القطعة الأساسي للموظف
     if (String(value).trim() === '') delete rec.piecePrice;
-    else rec.piecePrice = Number(value);
+    else rec.piecePrice = toNum(value);
   } else {
-    rec[field] = Number(value || 0);
+    rec[field] = toNum(value);
   }
   saveData(DB_KEYS.PAYROLL, payrollData);
   // نُحدِّث خلايا الحساب والإجماليات فقط دون إعادة بناء الجدول كاملاً،
@@ -760,6 +807,7 @@ function openExpenseModal(id = null) {
   $('#exp-description').value = ex?.description || '';
   $('#exp-amount').value = ex?.amount ?? '';
   $('#exp-notes').value = ex?.notes || '';
+  formatMoneyScope($('#expense-modal'));
   openModal('expense-modal');
 }
 
@@ -767,7 +815,7 @@ function saveExpense() {
   const id = $('#exp-id').value || 'exp_' + Date.now();
   const date = $('#exp-date').value;
   const description = $('#exp-description').value.trim();
-  const amount = Number($('#exp-amount').value || 0);
+  const amount = toNum($('#exp-amount').value);
   if (!date || !description || !amount) { toast('يرجى ملء جميع الحقول المطلوبة', 'error'); return; }
 
   const ex = {
@@ -822,6 +870,7 @@ function openRevenueModal(id = null) {
   $('#rev-description').value = rev?.description || '';
   $('#rev-amount').value = rev?.amount ?? '';
   $('#rev-notes').value = rev?.notes || '';
+  formatMoneyScope($('#revenue-modal'));
   openModal('revenue-modal');
 }
 
@@ -829,7 +878,7 @@ function saveRevenue() {
   const id = $('#rev-id').value || 'rev_' + Date.now();
   const date = $('#rev-date').value;
   const description = $('#rev-description').value.trim();
-  const amount = Number($('#rev-amount').value || 0);
+  const amount = toNum($('#rev-amount').value);
   if (!date || !description || !amount) { toast('يرجى ملء حقول الإيراد المطلوبة', 'error'); return; }
   const rev = { id, date, category: $('#rev-category').value, description, amount, notes: $('#rev-notes').value.trim() };
   const idx = revenues.findIndex(x => x.id === id);
@@ -915,6 +964,7 @@ function loadSettingsForm() {
   $('#set-currency').value = settings.currency || 'ر.س';
   $('#set-monthly-income').value = settings.monthlyIncome || 0;
   pendingCompanyLogo = null;
+  formatMoneyScope($('#page-settings'));
   updateCompanyBranding();
 }
 
@@ -956,7 +1006,7 @@ function saveSettings() {
     phone: $('#set-phone').value.trim(),
     address: $('#set-address').value.trim(),
     currency: $('#set-currency').value,
-    monthlyIncome: Number($('#set-monthly-income').value || 0),
+    monthlyIncome: toNum($('#set-monthly-income').value),
     logo: pendingCompanyLogo !== null ? pendingCompanyLogo : (settings.logo || '')
   };
   saveData(DB_KEYS.SETTINGS, settings);
