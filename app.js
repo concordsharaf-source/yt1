@@ -2,7 +2,17 @@
 'use strict';
 
 // ============ إدارة البيانات ============
-const DB_KEYS = { EMPLOYEES: 'ems_employees', EXPENSES: 'ems_expenses', REVENUES: 'ems_revenues', SETTINGS: 'ems_settings', PAYROLL: 'ems_payroll' };
+const DB_KEYS = {
+  EMPLOYEES: 'ems_employees', EXPENSES: 'ems_expenses', REVENUES: 'ems_revenues',
+  SETTINGS: 'ems_settings', PAYROLL: 'ems_payroll',
+  APPROVED: 'ems_approved',          // الشهور المعتمدة/المختومة للمسير
+  DELETED: 'ems_deleted_emp',        // سلة المحذوفات (الموظفون)
+  BACKUPS: 'ems_backups'             // نسخ احتياطي تلقائي
+};
+const DEFAULT_SETTINGS = {
+  companyName: 'مؤسستي', taxNumber: '', phone: '', address: '',
+  currency: 'ر.س', monthlyIncome: 0, logo: ''
+};
 
 function loadData(key, defaultVal = []) {
   try { const d = localStorage.getItem(key); return d ? JSON.parse(d) : defaultVal; }
@@ -13,16 +23,16 @@ function saveData(key, data) { localStorage.setItem(key, JSON.stringify(data)); 
 let employees = loadData(DB_KEYS.EMPLOYEES);
 let expenses  = loadData(DB_KEYS.EXPENSES);
 let revenues  = loadData(DB_KEYS.REVENUES);
-let settings  = loadData(DB_KEYS.SETTINGS, {
-  companyName: 'مؤسستي', taxNumber: '', phone: '', address: '',
-  currency: 'ر.س', monthlyIncome: 0, logo: ''
-});
+let settings  = loadData(DB_KEYS.SETTINGS, DEFAULT_SETTINGS);
 let payrollData = loadData(DB_KEYS.PAYROLL, {}); // { "2026-09": { empId: {pieces, bonus, allowance, advance, deduction} } }
+let approvedMonths  = loadData(DB_KEYS.APPROVED, {}); // { "2026-09": ISO }
+let deletedEmployees = loadData(DB_KEYS.DELETED, []);  // سلة المحذوفات
 
 let confirmCallback = null;
 let deferredInstallPrompt = null;
 let pendingCompanyLogo = null;
 let hasUnsavedChanges = false;
+let lastUndo = null;   // آخر إجراء قابل للتراجع (نسخة قبل العملية)
 
 // ============ أدوات مساعدة ============
 const $  = s => document.querySelector(s);
@@ -39,6 +49,139 @@ function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;',
 function revenueTotalForMonth(mk) {
   const list = revenues.filter(x => x.date?.startsWith(mk));
   return list.length ? list.reduce((sum, x) => sum + Number(x.amount || 0), 0) : Number(settings.monthlyIncome || 0);
+}
+
+const AR_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+function monthLabel(mk) {
+  const [y, m] = String(mk).split('-');
+  return `${AR_MONTHS[Number(m) - 1]} ${y}`;
+}
+
+// إجماليات شهر محدّد (إيراد / رواتب / نفقات / صافي) - تُستخدم في الرسم والمقارنة
+function monthlyStats(mk) {
+  const income = revenueTotalForMonth(mk);
+  let salariesNet = 0;
+  employees.forEach(e => { salariesNet += calcEmployeeNet(e, payrollData[mk]?.[e.id]).net; });
+  const exp = (expenses || []).filter(x => x.date?.startsWith(mk));
+  const expensesTotal = exp.reduce((s, x) => s + Number(x.amount || 0), 0);
+  return { income, salariesNet, expenses: expensesTotal, totalOut: salariesNet + expensesTotal, net: income - salariesNet - expensesTotal };
+}
+
+// ========== النسخ الاحتياطي والتراجع ==========
+function collectState() {
+  return { employees, expenses, revenues, settings, payrollData, approved: approvedMonths, deleted: deletedEmployees };
+}
+function applyState(st) {
+  employees = st.employees || [];
+  expenses = st.expenses || [];
+  revenues = st.revenues || [];
+  settings = st.settings || DEFAULT_SETTINGS;
+  payrollData = st.payrollData || {};
+  approvedMonths = st.approved || {};
+  deletedEmployees = st.deleted || [];
+  saveData(DB_KEYS.EMPLOYEES, employees); saveData(DB_KEYS.EXPENSES, expenses);
+  saveData(DB_KEYS.REVENUES, revenues); saveData(DB_KEYS.SETTINGS, settings);
+  saveData(DB_KEYS.PAYROLL, payrollData); saveData(DB_KEYS.APPROVED, approvedMonths);
+  saveData(DB_KEYS.DELETED, deletedEmployees);
+}
+function loadBackups() { return loadData(DB_KEYS.BACKUPS, []); }
+function renderBackupInfo() {
+  const el = $('#backup-info'); const el2 = $('#backup-list');
+  const bs = loadBackups();
+  if (el) el.textContent = bs.length ? `عدد النسخ المحفوظة: ${bs.length}` : 'لا توجد نسخ بعد';
+  if (el2) {
+    el2.innerHTML = bs.length ? bs.slice().reverse().map((b, idxRev) => {
+      const realIdx = bs.length - 1 - idxRev;
+      const t = new Date(b.ts);
+      const dstr = t.toLocaleDateString('en-US') + ' ' + t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      return `<div class="backup-item"><span>${b.tag || 'نسخة'} — ${dstr}</span><button class="btn btn-sm btn-outline" onclick="restoreBackupAt(${realIdx})">استعادة</button></div>`;
+    }).join('') : '<div style="color:#999;font-size:.85rem;padding:.5rem">لا توجد نسخ احتياطية بعد</div>';
+  }
+}
+function pushBackup(tag) {
+  const bs = loadBackups();
+  bs.push({ ts: new Date().toISOString(), tag, state: collectState() });
+  if (bs.length > 5) bs.splice(0, bs.length - 5);
+  try { saveData(DB_KEYS.BACKUPS, bs); }
+  catch (e) {
+    // امتلاء المساحة: نتخلى عن النسخ الأقدم حتى تنجح الكتابة
+    bs.shift();
+    try { saveData(DB_KEYS.BACKUPS, bs); } catch (e2) {}
+  }
+  renderBackupInfo();
+}
+function backupNow() { pushBackup('يدوي'); toast('تم حفظ نسخة احتياطية الآن ✅'); }
+function restoreBackupAt(i) {
+  const bs = loadBackups();
+  const b = bs[i]; if (!b) return;
+  if (!window.confirm('سيتم استبدال البيانات الحالية بنسخة ' + (b.tag || '') + '؟')) return;
+  applyState(b.state);
+  location.reload();
+}
+function restoreLastBackup() {
+  const bs = loadBackups();
+  if (!bs.length) { toast('لا توجد نسخة للاستعادة', 'warning'); return; }
+  restoreBackupAt(bs.length - 1);
+}
+
+// تسجيل إجراء قبل تغيير مدمر ليتاح التراجع
+function recordUndo(label) {
+  lastUndo = { label, state: collectState() };
+  const chip = $('#undo-chip');
+  if (chip) {
+    chip.style.display = 'flex';
+    $('#undo-label').textContent = label || 'التراجع';
+  }
+}
+function undoLastAction() {
+  if (!lastUndo) { toast('لا يوجد إجراء للتراجع عنه', 'warning'); return; }
+  applyState(lastUndo.state);
+  lastUndo = null;
+  location.reload();
+}
+
+// ========== سلة المحذوفات (الموظفون) ==========
+function renderTrash() {
+  const el = $('#trash-list');
+  if (!el) return;
+  if (!deletedEmployees.length) { el.innerHTML = '<div style="color:#999;font-size:.85rem;padding:.5rem">السلة فارغة</div>'; return; }
+  el.innerHTML = deletedEmployees.map(d => {
+    const e = d.emp || d;
+    return `<div class="trash-item">
+      <span class="trash-name">${esc(e.name || '—')} <small>${esc(e.title || '')}</small></span>
+      <span class="trash-actions">
+        <button class="btn btn-sm btn-success" onclick="restoreDeleted('${e.id}')">↩️ استعادة</button>
+        <button class="btn btn-sm btn-danger" onclick="permanentDelete('${e.id}')">🗑️ نهائي</button>
+      </span>
+    </div>`;
+  }).join('');
+}
+function restoreDeleted(id) {
+  const i = deletedEmployees.findIndex(x => (x.emp || x).id === id);
+  if (i < 0) return;
+  const rec = deletedEmployees[i];
+  const emp = rec.emp || rec;
+  deletedEmployees.splice(i, 1);
+  employees.push(emp);
+  saveData(DB_KEYS.DELETED, deletedEmployees); saveData(DB_KEYS.EMPLOYEES, employees);
+  renderTrash(); renderEmployees(); renderDashboard();
+  toast('تمت استعادة الموظف ✅');
+}
+function permanentDelete(id) {
+  showConfirm('حذف نهائي لا يمكن استرجاعه؟', () => {
+    deletedEmployees = deletedEmployees.filter(x => (x.emp || x).id !== id);
+    saveData(DB_KEYS.DELETED, deletedEmployees);
+    renderTrash();
+    toast('تم الحذف نهائياً', 'warning');
+  });
+}
+function emptyTrash() {
+  showConfirm('إفراغ سلة المحذوفات نهائياً؟', () => {
+    deletedEmployees = [];
+    saveData(DB_KEYS.DELETED, deletedEmployees);
+    renderTrash();
+    toast('تم إفراغ السلة', 'warning');
+  });
 }
 
 function toast(msg, type = 'success') {
@@ -123,8 +266,8 @@ function showPage(page) {
   if (page === 'payroll')   renderPayroll();
   if (page === 'expenses')  renderExpenses();
   if (page === 'revenues')  renderRevenues();
-  if (page === 'reports')   renderReports();
-  if (page === 'settings')  loadSettingsForm();
+  if (page === 'reports')   { fillCompareSelectors(); renderReports(); }
+  if (page === 'settings')  { renderBackupInfo(); renderTrash(); loadSettingsForm(); }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -320,6 +463,8 @@ function renderDashboard() {
       <td><span class="badge badge-${e.type}">${e.type === 'piece' ? 'بالقطعة' : 'شهري'}</span></td>
       <td class="amount">${e.type === 'piece' ? fmt(e.piecePrice) + ' / قطعة' : fmt(e.salary)}</td>
     </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#999;padding:2rem">لا يوجد موظفون بعد — أضف أول موظف!</td></tr>';
+
+  renderDashboardCharts();
 }
 
 function toggleEmployeeActions(id) {
@@ -632,11 +777,14 @@ function editEmployee(id) { openEmployeeModal(id); }
 
 function deleteEmployee(id) {
   const emp = employees.find(e => e.id === id);
-  showConfirm(`هل أنت متأكد من حذف الموظف "${emp?.name}"؟ لا يمكن التراجع عن هذا الإجراء.`, () => {
+  showConfirm(`هل أنت متأكد من حذف الموظف "${emp?.name}"؟ سينتقل إلى سلة المحذوفات ويمكن استرجاعه.`, () => {
+    recordUndo('حذف موظف');
     employees = employees.filter(e => e.id !== id);
+    deletedEmployees.unshift({ emp, deletedAt: new Date().toISOString() });
     saveData(DB_KEYS.EMPLOYEES, employees);
+    saveData(DB_KEYS.DELETED, deletedEmployees);
     renderEmployees(); renderDashboard();
-    toast('تم حذف الموظف', 'warning');
+    toast('نُقل الموظف إلى سلة المحذوفات');
   });
 }
 
@@ -700,10 +848,54 @@ function renderPayroll() {
 
   formatMoneyScope($('#payroll-body'));
   refreshPayrollNumbers();
+  applyPayrollSealUI();
+}
+
+function isMonthSealed(mk) { return !!(approvedMonths && approvedMonths[mk]); }
+
+// تفعيل/تعطيل حقول الإدخال وبطاقة الاعتماد حسب حالة اعتماد الشهر الحالي في المسير
+function applyPayrollSealUI() {
+  const mk = getSelectedMonth('payroll');
+  const sealed = isMonthSealed(mk);
+  const badge = $('#payroll-seal-badge');
+  const btn = $('#payroll-seal-btn');
+  if (badge) badge.style.display = sealed ? 'inline-flex' : 'none';
+  if (btn) {
+    btn.textContent = sealed ? '🔓 فك الاعتماد' : '🛡️ اعتماد الشهر';
+    btn.classList.toggle('btn-success', sealed);
+    btn.classList.toggle('btn-outline', !sealed);
+  }
+  // عند الاعتماد يُقفل كل حقول الإدخال في المسير
+  $$('#payroll-body .payroll-input').forEach(inp => inp.disabled = sealed);
+}
+
+function toggleMonthSeal() {
+  const mk = getSelectedMonth('payroll');
+  const sealed = isMonthSealed(mk);
+  const [y, m] = mk.split('-');
+  const lbl = monthLabel(mk);
+  if (sealed) {
+    showConfirm(`فك اعتماد مسير شهر «${lbl}»؟ سيعود قابلاً للتعديل.`, () => {
+      delete approvedMonths[mk];
+      saveData(DB_KEYS.APPROVED, approvedMonths);
+      applyPayrollSealUI();
+      toast('تم فك الاعتماد');
+    });
+  } else {
+    showConfirm(`اعتماد (ختم) مسير شهر «${lbl}»؟ بعد الاعتماد تُقفل المدخلات ويظهر ختم الاعتماد.`, () => {
+      recordUndo('اعتماد شهر');
+      approvedMonths[mk] = new Date().toISOString();
+      saveData(DB_KEYS.APPROVED, approvedMonths);
+      pushBackup('اعتماد ' + lbl);
+      applyPayrollSealUI();
+      toast('تم اعتماد الشهر وختمه ✅');
+    });
+  }
 }
 
 function updatePayrollField(empId, field, value) {
   const mk = getSelectedMonth('payroll');
+  if (isMonthSealed(mk)) { toast('هذا الشهر معتمد ومُقفل. فكّ الاعتماد أولاً للتعديل.', 'error'); renderPayroll(); return; }
   if (!payrollData[mk]) payrollData[mk] = {};
   if (!payrollData[mk][empId]) payrollData[mk][empId] = {};
   const rec = payrollData[mk][empId];
@@ -1087,6 +1279,180 @@ function clearAllData() {
   });
 }
 
+// ============ الرسوم البيانية (لوحة التحكم) ============
+function fmtShort(n) {
+  const v = Number(n) || 0;
+  const abs = Math.abs(v);
+  if (abs >= 1000000) return (v / 1000000).toFixed(1).replace(/\.0$/, '') + 'م';
+  if (abs >= 1000) return (v / 1000).toFixed(0) + ' ألف';
+  return Math.round(v).toString();
+}
+function fillChartYear() {
+  const sel = $('#chart-year'); if (!sel) return;
+  const years = new Set();
+  const now = new Date();
+  years.add(now.getFullYear());
+  expenses.forEach(x => { const y = Number(String(x.date).slice(0,4)); if (y) years.add(y); });
+  revenues.forEach(x => { const y = Number(String(x.date).slice(0,4)); if (y) years.add(y); });
+  if (!years.size) years.add(now.getFullYear() - 1);
+  const sorted = [...years].sort((a,b)=>a-b);
+  sel.innerHTML = sorted.map(y => `<option value="${y}">${y}</option>`).join('');
+  sel.value = String(now.getFullYear());
+}
+// سلسلة واحدة: { label, color, values: [] } (كل سلسلة بعدد مساوٍ لعدد التصنيفات)
+function svgChart(labels, series, title) {
+  const W = 620, H = 220, padL = 10, padR = 10, padT = 16, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const n = labels.length;
+  const all = [];
+  series.forEach(s => s.values.forEach(v => all.push(Number(v) || 0)));
+  let min = Math.min(0, ...all), max = Math.max(0, ...all);
+  if (max - min === 0) { max = 1; min = 0; }
+  const span = max - min;
+  const y = v => padT + ((max - v) / span) * plotH;   // y لقيمة v
+  const zeroY = y(0);
+  const groupW = plotW / n;
+  const slots = series.length;
+  const slotW = Math.min(30, groupW / slots * 0.8);
+
+  // خطوط أفقية إرشادية
+  let grid = '';
+  for (let g = 0; g <= 4; g++) {
+    const v = min + (span * g) / 4;
+    const yy = y(v);
+    grid += `<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="#eee" stroke-width="1"/>`;
+    grid += `<text x="${W-padR-3}" y="${yy+3}" text-anchor="end" font-size="9" fill="#999">${fmtShort(v)}</text>`;
+  }
+
+  let bars = '';
+  labels.forEach((lb, i) => {
+    const cx = padL + groupW * i + groupW / 2;
+    series.forEach((s, si) => {
+      const v = Number(s.values[i]) || 0;
+      const top = y(v);
+      const h = Math.abs(top - zeroY);
+      if (h < 0.5) return;
+      const x = cx - (slotW * slots) / 2 + si * slotW;
+      const col = v < 0 ? '#e74c3c' : s.color;
+      bars += `<rect x="${x}" y="${Math.min(top, zeroY)}" width="${slotW-2}" height="${h}" rx="2" fill="${col}" opacity="0.92">
+        <title>${lb}: ${s.label} = ${fmt(v)}</title></rect>`;
+    });
+  });
+
+  let xlab = '';
+  labels.forEach((lb, i) => {
+    const cx = padL + groupW * i + groupW / 2;
+    xlab += `<text x="${cx}" y="${H-6}" text-anchor="middle" font-size="9" fill="#666">${lb}</text>`;
+  });
+
+  const legW = 130;
+  const leg = series.map((s, i) =>
+    `<rect x="${padL + i*legW}" y="0" width="8" height="8" fill="${s.color}"/><text x="${padL + i*legW + 11}" y="8" font-size="10" fill="#444">${s.label}</text>`
+  ).join('');
+
+  return `<div class="chart-title">${esc(title)}</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" role="img" aria-label="${esc(title)}">
+      ${grid}${bars}${xlab}${leg}
+    </svg>`;
+}
+
+function renderDashboardCharts() {
+  const box = $('#dashboard-charts'); if (!box) return;
+  const range = ($('input[name=chart-range]:checked') || {}).value || 'monthly';
+  const year = Number($('#chart-year').value) || new Date().getFullYear();
+  const colors = ['#27ae60', '#f39c12', '#2e86de'];
+  const names = ['الإيراد', 'المصروف', 'الصافي'];
+
+  if (range === 'yearly') {
+    const years = recentYearKeys(5);
+    const ys = years.map(y => yearStats(y));
+    box.innerHTML = svgChart(years.map(String), [
+      { label: 'الإيراد', color: '#27ae60', values: ys.map(s => s.income) },
+      { label: 'المصروف', color: '#f39c12', values: ys.map(s => s.totalOut) },
+      { label: 'الصافي', color: '#2e86de', values: ys.map(s => s.net) }
+    ], `مقارنة سنوية ${years[0]} – ${years[years.length-1]}`);
+  } else {
+    const months = Array.from({ length: 12 }, (_, i) => monthKey(year, i + 1));
+    const ms = months.map(mk => monthlyStats(mk));
+    box.innerHTML = svgChart(AR_MONTHS.slice(), [
+      { label: 'الإيراد', color: '#27ae60', values: ms.map(s => s.income) },
+      { label: 'المصروف', color: '#f39c12', values: ms.map(s => s.totalOut) },
+      { label: 'الصافي', color: '#2e86de', values: ms.map(s => s.net) }
+    ], `سنة ${year}: الإيراد والمصروف والصافي شهرياً`);
+  }
+}
+function recentYearKeys(n) {
+  const out = []; const now = new Date(); let y = now.getFullYear();
+  for (let i = 0; i < n; i++) out.unshift(y - (n - 1 - i));
+  return out;
+}
+function yearStats(y) {
+  let income = 0, totalOut = 0, net = 0;
+  for (let m = 1; m <= 12; m++) {
+    const s = monthlyStats(monthKey(y, m));
+    income += s.income; totalOut += s.totalOut; net += s.net;
+  }
+  return { income, totalOut, net };
+}
+
+// ============ مقارنة شهرين (التقارير) ============
+function fillCompareSelectors() {
+  const now = new Date();
+  ['cmp-a','cmp-b'].forEach(p => {
+    const ms = $(`#${p}-month`), ys = $(`#${p}-year`);
+    if (!ms || !ys) return;
+    ms.innerHTML = AR_MONTHS.map((m,i)=>`<option value="${i+1}">${m}</option>`).join('');
+    ys.innerHTML = recentYearKeys(5).map(y=>`<option value="${y}">${y}</option>`).join('');
+    ms.value = String(now.getMonth() + 1);
+    ys.value = String(now.getFullYear());
+  });
+  // ب) الشهر السابق افتراضياً
+  const prev = new Date(); prev.setMonth(prev.getMonth() - 1);
+  $('#cmp-b-month').value = String(prev.getMonth() + 1);
+  $('#cmp-b-year').value = String(prev.getFullYear());
+  renderCompare();
+}
+function cmpSel(prefix) { return monthKey(Number($(`#${prefix}-year`).value), Number($(`#${prefix}-month`).value)); }
+function renderCompare() {
+  const box = $('#compare-result'); if (!box) return;
+  const a = monthlyStats(cmpSel('cmp-a'));
+  const b = monthlyStats(cmpSel('cmp-b'));
+  const la = monthLabel(cmpSel('cmp-a')), lb = monthLabel(cmpSel('cmp-b'));
+  const d = (va, vb) => vb - va;
+  const rows = [
+    ['الإيرادات', a.income, b.income],
+    ['الرواتب (صافي)', a.salariesNet, b.salariesNet],
+    ['النفقات التشغيلية', a.expenses, b.expenses],
+    ['إجمالي المصروفات', a.totalOut, b.totalOut],
+    ['صافي الربح', a.net, b.net]
+  ];
+  function cell(v, delta) {
+    const cls = delta > 0 ? 'cmp-up' : delta < 0 ? 'cmp-down' : '';
+    const sign = delta > 0 ? '▲' : delta < 0 ? '▼' : '—';
+    return `<td>${fmt(v)}</td><td class="${cls}">${sign} ${fmt(Math.abs(delta))}</td>`;
+  }
+  box.innerHTML = `<p style="margin:0 0 .5rem;color:#444"><strong>أ:</strong> ${esc(la)} &nbsp;|&nbsp; <strong>ب:</strong> ${esc(lb)}</p>
+    <div class="table-responsive"><table class="data-table compare-table">
+      <thead><tr><th>البند</th><th>الشهر أ</th><th>الشهر ب</th><th>الفرق (ب - أ)</th></tr></thead>
+      <tbody>${rows.map(([n, va, vb]) => `<tr><td>${n}</td>${cell(va, vb)}<td class="amount">${fmt(d(va,vb))}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+// ============ تنظيف سلة المحذوفات + نسخة يومية ============
+function purgeExpiredTrash() {
+  const keepDays = 30;
+  const cut = Date.now() - keepDays * 24 * 60 * 60 * 1000;
+  const before = deletedEmployees.length;
+  deletedEmployees = (deletedEmployees || []).filter(r => new Date(r.deletedAt || 0).getTime() >= cut);
+  if (deletedEmployees.length !== before) { saveData(DB_KEYS.DELETED, deletedEmployees); renderTrash(); }
+}
+function dailyAutoBackup() {
+  const today = new Date().toISOString().slice(0, 10);
+  const bs = loadBackups();
+  if (bs.some(b => (b.tag || '').includes(today))) return;
+  try { pushBackup('نسخة يومية ' + today); } catch (e) {}
+}
+
 // ============ PWA ============
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
@@ -1107,7 +1473,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=2.8').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=2.9').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
@@ -1120,6 +1486,9 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', () => {
   installExitGuard();
   fillMonthYearSelectors();
+  fillChartYear();
+  purgeExpiredTrash();
+  dailyAutoBackup();
   updateCompanyBranding();
   const d = new Date();
   const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];

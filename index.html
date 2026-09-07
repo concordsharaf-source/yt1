@@ -103,6 +103,20 @@
 
     <div class="card">
       <div class="card-header">
+        <h3>📊 الرسوم البيانية للشؤون المالية</h3>
+        <div class="chart-controls">
+          <label class="chart-view"><input type="radio" name="chart-range" value="monthly" checked onchange="renderDashboardCharts()"> شهري</label>
+          <label class="chart-view"><input type="radio" name="chart-range" value="yearly" onchange="renderDashboardCharts()"> سنوي</label>
+          <select id="chart-year" class="form-select" onchange="renderDashboardCharts()"></select>
+        </div>
+      </div>
+      <div id="dashboard-charts" class="dashboard-charts">
+        <p style="color:#999;padding:.5rem">جارٍ تحميل الرسم البياني…</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <h3>📋 آخر 5 موظفين</h3>
         <button class="btn btn-sm btn-outline" onclick="showPage('employees')">عرض الكل</button>
       </div>
@@ -115,6 +129,7 @@
         </table>
       </div>
     </div>
+
   </section>
 
   <!-- الموظفون -->
@@ -152,7 +167,9 @@
     <div class="page-actions">
       <select id="payroll-month" class="form-select" onchange="renderPayroll()"></select>
       <select id="payroll-year" class="form-select" onchange="renderPayroll()"></select>
+      <span id="payroll-seal-badge" style="display:none" class="badge badge-approval">✅ شهر معتمد</span>
       <button class="btn btn-success" onclick="printPayroll()">🖨️ طباعة مسير الرواتب</button>
+      <button class="btn btn-outline" id="payroll-seal-btn" onclick="toggleMonthSeal()">🛡️ اعتماد الشهر</button>
     </div>
     <div class="card">
       <div class="payroll-summary" id="payroll-summary"></div>
@@ -275,6 +292,28 @@
         <div class="report-row total-row grand-total"><span>صافي الربح:</span><strong id="rep-final-net">0</strong></div>
       </div>
     </div>
+
+    <div class="card compare-card">
+      <div class="card-header"><h3>🔁 مقارنة بين شهرين</h3></div>
+      <div class="compare-controls">
+        <div class="compare-field">
+          <label>الشهر الأول (أ)</label>
+          <div class="compare-selects">
+            <select id="cmp-a-month" class="form-select" onchange="renderCompare()"></select>
+            <select id="cmp-a-year" class="form-select" onchange="renderCompare()"></select>
+          </div>
+        </div>
+        <div class="compare-vs">مقابل</div>
+        <div class="compare-field">
+          <label>الشهر الثاني (ب)</label>
+          <div class="compare-selects">
+            <select id="cmp-b-month" class="form-select" onchange="renderCompare()"></select>
+            <select id="cmp-b-year" class="form-select" onchange="renderCompare()"></select>
+          </div>
+        </div>
+      </div>
+      <div id="compare-result"><p style="color:#999;padding:.5rem">اختر شهرين لعرض المقارنة.</p></div>
+    </div>
   </section>
 
   <!-- الإعدادات -->
@@ -334,6 +373,26 @@
         <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">📤 استيراد بيانات</button>
         <button class="btn btn-danger" onclick="clearAllData()">🗑️ مسح جميع البيانات</button>
       </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>🔄 النسخ الاحتياطي التلقائي والتراجع</h3></div>
+      <p style="color:#666;font-size:.9rem;margin:0 0 .6rem">يُحفظ تلقائياً عند كل تغيير مهم. يمكنك التراجع عن آخر إجراء أو استعادة أي نسخة سابقة.</p>
+      <div class="quick-actions">
+        <button class="btn btn-outline" onclick="undoLastAction()">↩️ تراجع عن آخر إجراء</button>
+        <button class="btn btn-outline" onclick="restoreLastBackup()">🔁 استعادة آخر نسخة</button>
+        <button class="btn btn-info" onclick="backupNow()">💾 حفظ نسخة الآن</button>
+      </div>
+      <p id="backup-info" style="color:#999;font-size:.85rem;margin:.6rem 0 0"></p>
+      <div id="backup-list" class="backup-list"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>🗑️ سلة المحذوفات (الموظفون)</h3>
+        <button class="btn btn-sm btn-danger" onclick="emptyTrash()" id="empty-trash-btn">تفريغ السلة</button>
+      </div>
+      <p style="color:#666;font-size:.9rem;margin:0 0 .6rem">الموظفون المحذوفون يُحفظون هنا ٣٠ يوماً قبل حذفهم نهائياً.</p>
+      <div id="trash-list" class="trash-list"></div>
     </div>
 
     <div class="card">
@@ -585,6 +644,12 @@
 
 <!-- إشعارات -->
 <div id="toast-container"></div>
+
+<!-- شريط التراجع -->
+<div id="undo-chip" style="display:none">
+  <button class="btn btn-outline btn-sm" onclick="undoLastAction()">↩️ التراجع عن «<span id="undo-label"></span>»</button>
+  <button class="undo-x" onclick="document.getElementById('undo-chip').style.display='none'">✕</button>
+</div>
 
 <script src="app.js"></script>
 </body>

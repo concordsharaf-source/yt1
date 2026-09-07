@@ -640,3 +640,67 @@ textarea.form-input { resize: vertical; }
   .grand-total { background: #eee !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .grand-total strong { color: #000 !important; }
 }
+
+/* ===== اعتماد الشهر (ختم المسير) ===== */
+.badge-approval {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #e8f5e9; color: #1b5e20; border: 1px solid #81c784;
+  padding: 0.3rem 0.7rem; border-radius: 20px; font-weight: 700; font-size: .8rem;
+}
+
+/* ===== الرسوم البيانية ===== */
+.chart-controls {
+  display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-size: .85rem;
+}
+.chart-controls select { width: auto; }
+.chart-view { display: inline-flex; align-items: center; gap: 3px; color: #555; cursor: pointer; }
+.chart-view input { cursor: pointer; }
+.dashboard-charts { padding: 1rem 1.25rem; }
+.chart-title { font-weight: 700; margin: 0 0 .5rem; color: #333; font-size: .95rem; }
+.dashboard-charts svg { display: block; max-width: 100%; }
+
+/* ===== مقارنة شهرين ===== */
+.compare-card .card-header h3 { margin: 0; }
+.compare-controls {
+  display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap;
+  padding: 1.25rem; border-bottom: 1px solid var(--border);
+}
+.compare-field { display: flex; flex-direction: column; gap: .35rem; flex: 1; min-width: 200px; }
+.compare-field label { font-weight: 600; font-size: .85rem; color: #555; }
+.compare-selects { display: flex; gap: .5rem; }
+.compare-selects .form-select { flex: 1; }
+.compare-vs { font-weight: 800; color: var(--primary); padding-bottom: .6rem; }
+#compare-result { padding: 1rem 1.25rem; }
+.cmp-up { color: var(--success); font-weight: 600; }
+.cmp-down { color: #e53935; font-weight: 600; }
+.compare-table td, .compare-table th { text-align: right; }
+
+/* ===== النسخ الاحتياطي ===== */
+.backup-list { max-height: 260px; overflow: auto; border-top: 1px solid var(--border); }
+.backup-item {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: .5rem; padding: .55rem .9rem; font-size: .85rem; border-bottom: 1px solid #f0f0f0;
+}
+.backup-item:last-child { border-bottom: none; }
+
+/* ===== سلة المحذوفات ===== */
+.trash-list { max-height: 280px; overflow: auto; border-top: 1px solid var(--border); }
+.trash-item {
+  display: flex; justify-content: space-between; align-items: center; gap: .75rem;
+  padding: .6rem .9rem; font-size: .9rem; border-bottom: 1px solid #f0f0f0;
+}
+.trash-item:last-child { border-bottom: none; }
+.trash-name strong { color: #333; }
+.trash-name small { color: #999; margin-right: .4rem; }
+.trash-actions { display: flex; gap: .4rem; flex-shrink: 0; }
+.btn-danger.btn-sm { padding: .3rem .6rem; font-size: .75rem; }
+
+/* ===== شريط التراجع ===== */
+#undo-chip {
+  position: fixed; bottom: 18px; right: 50%; transform: translateX(50%);
+  background: #fff; box-shadow: 0 6px 22px rgba(0,0,0,.18); border-radius: 40px;
+  border: 1px solid var(--border); padding: .35rem .5rem .35rem .7rem;
+  align-items: center; gap: .35rem; z-index: 999; font-size: .85rem;
+}
+.undo-x { border: none; background: transparent; color: #888; font-size: 1rem; cursor: pointer; padding: .2rem .3rem; }
+.undo-x:hover { color: #e53935; }
