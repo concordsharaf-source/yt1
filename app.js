@@ -65,11 +65,14 @@ function calcEmployeeNet(emp, monthData = {}) {
   // ثم تُضاف الضريبة فوقها لاحقاً (Gross-up) كتكلفة على المنشأة:
   //   قبل الضريبة = مجموع الصافي ÷ (1 - نسبة الضريبة) ،  الضريبة تُحسب على ذلك.
   let netBase = 0, netExtra = 0, pieces = 0, netPiece = 0;
+  // سعر القطعة الفعلي: إن حُدِّد لهذا الشهر في مسير الرواتب يُؤخذ منه،
+  // وإلا سعر القطعة الأساسي المسجّل للموظف
+  const piecePrice = Number(md.piecePrice ?? emp.piecePrice ?? 0);
   if (emp.type === 'piece') {
     // عامل بالقطعة: سعر القطعة المكتوب = صافي ما يستلمه عن كل قطعة،
     // وقيمة القطع كلها هي أساسه
     pieces   = Number(md.pieces ?? 0);
-    netPiece = pieces * Number(emp.piecePrice || 0);
+    netPiece = pieces * piecePrice;
     netBase  = netPiece;
     netExtra = 0;
   } else {
@@ -77,7 +80,7 @@ function calcEmployeeNet(emp, monthData = {}) {
     // ويُضاف له أيّ قيمة قطع إضافية صافية
     netBase  = Number(emp.salary || 0);
     pieces   = Number(md.extraPieces ?? 0);
-    netExtra = pieces * Number(emp.piecePrice || 0);
+    netExtra = pieces * piecePrice;
     netPiece = netExtra;
   }
 
@@ -516,8 +519,10 @@ function renderPayroll() {
     totBonus += c.bonus; totAllow += c.allowance; totAdv += c.advance; totDed += c.deduction; totTax += c.tax; totNet += c.net;
 
     const pieceField = e.type === 'piece' ? 'pieces' : 'extraPieces';
+    // سعر القطعة قابل للكتابة في المسير، ويُحفظ خاصاً بالشهر (لا يغيّر الأساسي)
+    const monthPiecePrice = (d.piecePrice != null) ? d.piecePrice : e.piecePrice;
     const pieceCell = `<td><input type="number" min="0" class="form-input payroll-input" value="${d[pieceField] ?? ''}" placeholder="0" onchange="updatePayrollField('${e.id}','${pieceField}',this.value)"></td>
-         <td class="amount">${fmt(e.piecePrice)}</td>
+         <td><input type="number" min="0" step="0.01" class="form-input payroll-input" value="${monthPiecePrice != null ? monthPiecePrice : ''}" placeholder="0" onchange="updatePayrollField('${e.id}','piecePrice',this.value)"></td>
          <td class="amount">${fmt(c.pieceTotal)}</td>`;
     const deductionCell = e.type === 'monthly'
       ? `<select class="form-select payroll-input" onchange="updatePayrollField('${e.id}','installments',this.value)">${[0,1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}" ${(d.installments ?? e.installments ?? 0) == n ? 'selected' : ''}>${n === 0 ? 'بدون قسط' : n + ' قسط'}</option>`).join('')}</select>`
@@ -564,7 +569,14 @@ function updatePayrollField(empId, field, value) {
   const mk = getSelectedMonth('payroll');
   if (!payrollData[mk]) payrollData[mk] = {};
   if (!payrollData[mk][empId]) payrollData[mk][empId] = {};
-  payrollData[mk][empId][field] = Number(value || 0);
+  const rec = payrollData[mk][empId];
+  if (field === 'piecePrice') {
+    // ترك الحقل فارغاً = استخدام سعر القطعة الأساسي للموظف
+    if (String(value).trim() === '') delete rec.piecePrice;
+    else rec.piecePrice = Number(value);
+  } else {
+    rec[field] = Number(value || 0);
+  }
   saveData(DB_KEYS.PAYROLL, payrollData);
   renderPayroll();
   toast('تم حفظ التعديل ✅');
@@ -911,7 +923,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=2.1').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=2.2').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
