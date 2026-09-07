@@ -639,7 +639,14 @@ function installApp() {
 }
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (window.__emsReloadedForUpdate) return;
+      window.__emsReloadedForUpdate = true;
+      window.location.reload();
+    });
+  });
 }
 
 // ============ التهيئة ============
