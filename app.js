@@ -61,31 +61,45 @@ function calcEmployeeNet(emp, monthData = {}) {
   const taxFrac   = taxRate / 100;
   const keepFrac  = 1 - taxFrac; // الجزء الذي يبقى للموظف بعد الضريبة
 
-  let base = 0, pieces = 0, pieceTotal = 0, gross = 0;
+  // كل المبالغ المُدخَلة تُعامَل كمبالغ صافية يستلمها الموظف/العامل فعلاً،
+  // ثم تُضاف الضريبة فوقها لاحقاً (Gross-up) كتكلفة على المنشأة:
+  //   قبل الضريبة = مجموع الصافي ÷ (1 - نسبة الضريبة) ،  الضريبة تُحسب على ذلك.
+  let netBase = 0, netExtra = 0, pieces = 0, netPiece = 0;
   if (emp.type === 'piece') {
-    // عامل بالقطعة: سعر القطعة يُعدّ قبل الضريبة (يبقى كما هو)
-    pieces     = Number(md.pieces ?? 0);
-    pieceTotal = pieces * Number(emp.piecePrice || 0);
-    base = pieceTotal;
-    gross = base + bonus + allowance;
+    // عامل بالقطعة: سعر القطعة المكتوب = صافي ما يستلمه عن كل قطعة،
+    // وقيمة القطع كلها هي أساسه
+    pieces   = Number(md.pieces ?? 0);
+    netPiece = pieces * Number(emp.piecePrice || 0);
+    netBase  = netPiece;
+    netExtra = 0;
   } else {
-    // موظف شهري: الراتب المكتوب = صافي بعد الضريبة (ما يستلمه الموظف فعلًا).
-    // يُستخرج منه المبلغ قبل الضريبة = صافي ÷ (1 - نسبة الضريبة)
-    const netSalary = Number(emp.salary || 0);
-    const grossedSalary = keepFrac > 0 ? netSalary / keepFrac : 0;
-    pieces     = Number(md.extraPieces ?? 0);
-    pieceTotal = pieces * Number(emp.piecePrice || 0);
-    base = netSalary + pieceTotal;
-    gross = grossedSalary + pieceTotal + bonus + allowance;
+    // موظف شهري: الراتب المكتوب = صافي بعد الضريبة،
+    // ويُضاف له أيّ قيمة قطع إضافية صافية
+    netBase  = Number(emp.salary || 0);
+    pieces   = Number(md.extraPieces ?? 0);
+    netExtra = pieces * Number(emp.piecePrice || 0);
+    netPiece = netExtra;
   }
 
+  // صافي كل ما يستلمه الموظف/العامل قبل خصم السلف والخصومات
+  const netEarnings = netBase + netExtra + bonus + allowance;
+
+  // قبل الضريبة = الصافي مرفوعاً ليشمل الضريبة (تكلفة المنشأة الإجمالية)
+  const gross = keepFrac > 0 ? netEarnings / keepFrac : netEarnings;
+  const tax   = gross * taxFrac;
+  const afterTax = gross - tax; // == netEarnings
+
+  // الخصومات (أقساط الشهري) تُحسب من الصافي المكتوب
   const deduction = emp.type === 'monthly' && installmentCount > 0
     ? (Number(emp.salary || 0) / 30) * installmentCount
     : legacyDeduction;
-  const tax = gross * taxFrac;
-  const afterTax = gross - tax;
-  const net   = afterTax - advance - deduction;
-  return { base, pieces, pieceTotal, bonus, allowance, advance, deduction, installmentCount, taxRate, gross, tax, afterTax, net };
+  const net = afterTax - advance - deduction;
+
+  return {
+    base: netBase, pieces, pieceTotal: netPiece,
+    bonus, allowance, advance, deduction, installmentCount, taxRate,
+    gross, tax, afterTax, net
+  };
 }
 
 // ============ التنقل ============
@@ -346,7 +360,7 @@ function updateNetPreview() {
   };
   const c = calcEmployeeNet(emp);
   $('#emp-net-preview').textContent = type === 'piece'
-    ? `صافي المستحق (بدون احتساب القطع): ${fmt(c.net)} — سيُضاف (القطع × ${fmt(emp.piecePrice)})`
+    ? `سعر القطعة المكتوب صافٍ للعامل (يستلم القطع × السعر). يُضاف فوقه الضريبة: قبل الضريبة ${fmt(c.gross)} — صافي ما يستلمه ${fmt(c.net)}`
     : `الراتب المكتوب صافٍ بعد الضريبة. قبل الضريبة: ${fmt(c.gross)} — ما يستلمه الموظف: ${fmt(c.net)}`;
 }
 
@@ -824,7 +838,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.8').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.9').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
