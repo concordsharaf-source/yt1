@@ -128,7 +128,7 @@
           <thead>
             <tr>
               <th>الاسم</th><th>المسمى الوظيفي</th><th>النوع</th><th>الراتب الأساسي</th>
-              <th>السلف</th><th>الخصومات</th><th>الحوافز</th><th>صافي الراتب</th><th>إجراءات</th>
+              <th>قبل الضريبة</th><th>نسبة الضريبة</th><th>بعد الضريبة</th><th>السلف</th><th>الخصومات</th><th>الحوافز</th><th>صافي الراتب</th><th>إجراءات</th>
             </tr>
           </thead>
           <tbody id="employees-table"></tbody>
@@ -151,8 +151,8 @@
           <thead>
             <tr>
               <th>#</th><th>الاسم</th><th>النوع</th><th>الأساسي</th>
-              <th>القطع</th><th>سعر القطعة</th><th>إجمالي القطع</th>
-              <th>حوافز</th><th>بدلات</th><th>سلف</th><th>خصومات</th><th>صافي المستحق</th>
+              <th>القطع / الإضافية</th><th>سعر القطعة</th><th>إجمالي القطع</th>
+              <th>قبل الضريبة</th><th>نسبة الضريبة</th><th>قيمة الضريبة</th><th>حوافز</th><th>بدلات</th><th>سلف</th><th>خصومات</th><th>بعد الضريبة</th>
             </tr>
           </thead>
           <tbody id="payroll-body"></tbody>
@@ -219,10 +219,13 @@
         <h3>💼 تفاصيل الرواتب</h3>
         <div class="report-row"><span>عدد الموظفين:</span><strong id="rep-emp-count">0</strong></div>
         <div class="report-row"><span>إجمالي الرواتب الأساسية:</span><strong id="rep-base-salaries">0</strong></div>
+        <div class="report-row"><span>إجمالي الرواتب قبل الضرائب:</span><strong id="rep-gross-salaries">0</strong></div>
         <div class="report-row"><span>إجمالي الحوافز:</span><strong id="rep-bonuses">0</strong></div>
         <div class="report-row"><span>إجمالي البدلات:</span><strong id="rep-allowances">0</strong></div>
+        <div class="report-row"><span>إجمالي الضرائب:</span><strong id="rep-taxes">0</strong></div>
         <div class="report-row"><span>إجمالي السلف:</span><strong id="rep-advances">0</strong></div>
         <div class="report-row"><span>إجمالي الخصومات:</span><strong id="rep-deductions">0</strong></div>
+        <div class="report-row"><span>إجمالي الرواتب بعد الضرائب:</span><strong id="rep-after-tax-salaries">0</strong></div>
         <div class="report-row total-row"><span>صافي الرواتب المستحقة:</span><strong id="rep-net-salaries">0</strong></div>
       </div>
 
@@ -358,8 +361,13 @@
           <input type="number" id="emp-salary" class="form-input" min="0" step="0.01">
         </div>
         <div class="form-group" id="group-piece-price" style="display:none">
-          <label>سعر القطعة *</label>
+          <label id="piece-price-label">سعر القطعة *</label>
           <input type="number" id="emp-piece-price" class="form-input" min="0" step="0.01">
+        </div>
+
+        <div class="form-group">
+          <label>نسبة الضريبة (%)</label>
+          <input type="number" id="emp-tax-rate" class="form-input" min="0" max="100" step="0.01" value="0">
         </div>
 
         <div class="form-group">

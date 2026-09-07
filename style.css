@@ -482,6 +482,30 @@ textarea.form-input { resize: vertical; }
   #sidebar .sidebar-footer .btn-outline { display: none; }
 }
 
+/* ===== الجوال: حقول الرواتب والجداول ===== */
+.payroll-input { min-width: 88px; text-align: center; padding: 0.55rem 0.4rem; }
+.data-table input[type="number"] { min-height: 42px; }
+
+@media (max-width: 700px) {
+  #main-content { padding-left: 0.65rem; padding-right: 0.65rem; }
+  .page-actions { gap: 0.5rem; }
+  .page-actions .form-select, .page-actions .btn { flex: 1 1 140px; min-height: 44px; }
+  .search-input { min-width: 100%; min-height: 44px; }
+  .card { margin-bottom: 1rem; border-radius: 10px; }
+  .table-responsive { margin: 0 -0.25rem; padding: 0 0.25rem 0.5rem; }
+  .data-table { min-width: 980px; font-size: 0.85rem; }
+  #payroll-table { min-width: 1380px; }
+  .data-table th, .data-table td { padding: 0.7rem 0.55rem; }
+  .data-table th { white-space: normal; line-height: 1.35; }
+  .payroll-input { width: 92px; min-width: 92px; font-size: 1rem; }
+  .employee-actions-menu { position: fixed; right: 0.75rem; left: 0.75rem; top: auto; min-width: 0; }
+  .employee-actions-menu button { min-height: 44px; font-size: 0.95rem; }
+  .form-grid { grid-template-columns: 1fr; padding: 1rem; gap: 0.8rem; }
+  .form-input, .form-select { min-height: 44px; font-size: 1rem; }
+  .modal-content { max-height: 94vh; }
+  .quick-actions .btn { flex: 1 1 145px; min-height: 44px; }
+}
+
 /* ===== طباعة ===== */
 @media print {
   body * { visibility: hidden; }
