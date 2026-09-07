@@ -447,7 +447,7 @@ function renderPayroll() {
   $('#payroll-footer').innerHTML = employees.length ? `<tr>
     <td colspan="3">الإجمالي</td>
     <td class="amount">${fmt(totBase)}</td>
-    <td>${totPieces}</td><td></td>
+    <td class="pay-total-count">${totPieces}</td><td></td>
     <td class="amount">${fmt(totPieceVal)}</td>
     <td class="amount">${fmt(totGross)}</td><td></td><td class="amount">${fmt(totTax)}</td>
     <td class="amount">${fmt(totBonus)}</td>

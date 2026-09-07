@@ -201,6 +201,21 @@ body {
   border-top: 2px solid var(--primary);
 }
 
+/* ===== أعمدة فاصلة داخل جدول مسير الرواتب ===== */
+#payroll-table th,
+#payroll-table td { border-inline-end: 1px solid var(--border); }
+#payroll-table thead th:last-child,
+#payroll-table tbody td:last-child,
+#payroll-table tfoot td:last-child { border-inline-end: none; }
+/* تمييز الرأس ومحاذاة الأعمدة الرقمية للمبالغ */
+#payroll-table thead th { border-bottom: 2px solid var(--primary-dark); }
+/* العدد الإجمالي للقطع أسفل عمود (القطع / الإضافية) في منتصف الخانة */
+#payroll-table tfoot .pay-total-count {
+  text-align: center;
+  font-size: 1.05rem;
+  color: var(--primary);
+}
+
 .badge {
   display: inline-block;
   padding: 0.25rem 0.6rem;
