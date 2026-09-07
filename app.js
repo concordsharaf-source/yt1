@@ -630,46 +630,29 @@ function renderPayroll() {
     const monthPiecePrice = (d.piecePrice != null) ? d.piecePrice : e.piecePrice;
     const pieceCell = `<td><input type="number" min="0" class="form-input payroll-input" value="${d[pieceField] ?? ''}" placeholder="0" onchange="updatePayrollField('${e.id}','${pieceField}',this.value)"></td>
          <td><input type="number" min="0" step="0.01" class="form-input payroll-input" value="${monthPiecePrice != null ? monthPiecePrice : ''}" placeholder="0" onchange="updatePayrollField('${e.id}','piecePrice',this.value)"></td>
-         <td class="amount">${fmt(c.pieceTotal)}</td>`;
+         <td class="amount cell-piecetotal">${fmt(c.pieceTotal)}</td>`;
     const deductionCell = e.type === 'monthly'
       ? `<select class="form-select payroll-input" onchange="updatePayrollField('${e.id}','installments',this.value)">${[0,1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}" ${(d.installments ?? e.installments ?? 0) == n ? 'selected' : ''}>${n === 0 ? 'بدون قسط' : n + ' قسط'}</option>`).join('')}</select>`
       : `<input type="number" min="0" class="form-input payroll-input" value="${d.deduction ?? 0}" onchange="updatePayrollField('${e.id}','deduction',this.value)">`;
 
-    return `<tr>
+    return `<tr data-emp="${e.id}">
       <td>${i + 1}</td>
       <td><strong>${esc(e.name)}</strong></td>
       <td><span class="badge badge-${e.type}">${e.type === 'piece' ? 'قطعة' : 'شهري'}</span></td>
       <td class="amount">${e.type === 'monthly' ? fmt(e.salary) : '—'}</td>
       ${pieceCell}
-      <td class="amount">${fmt(c.gross)}</td>
+      <td class="amount cell-gross">${fmt(c.gross)}</td>
       <td class="amount">${c.taxRate}%</td>
-      <td class="amount amount-negative">${fmt(c.tax)}</td>
+      <td class="amount amount-negative cell-tax">${fmt(c.tax)}</td>
       <td><input type="number" min="0" class="form-input payroll-input" value="${d.bonus ?? e.bonus ?? 0}" onchange="updatePayrollField('${e.id}','bonus',this.value)"></td>
       <td><input type="number" min="0" class="form-input payroll-input" value="${d.allowance ?? e.allowance ?? 0}" onchange="updatePayrollField('${e.id}','allowance',this.value)"></td>
       <td><input type="number" min="0" class="form-input payroll-input" value="${d.advance ?? 0}" onchange="updatePayrollField('${e.id}','advance',this.value)"></td>
       <td>${deductionCell}</td>
-      <td class="amount" style="color:var(--primary);font-weight:700">${fmt(c.net)}</td>
+      <td class="amount cell-net" style="color:var(--primary);font-weight:700">${fmt(c.net)}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="15" style="text-align:center;color:#999;padding:2rem">لا يوجد موظفون — أضف موظفين أولاً</td></tr>';
 
-  $('#payroll-footer').innerHTML = employees.length ? `<tr>
-    <td colspan="3">الإجمالي</td>
-    <td class="amount">${fmt(totBase)}</td>
-    <td class="pay-total-count">${totPieces}</td><td></td>
-    <td class="amount">${fmt(totPieceVal)}</td>
-    <td class="amount">${fmt(totGross)}</td><td></td><td class="amount">${fmt(totTax)}</td>
-    <td class="amount">${fmt(totBonus)}</td>
-    <td class="amount">${fmt(totAllow)}</td>
-    <td class="amount">${fmt(totAdv)}</td>
-    <td class="amount">${fmt(totDed)}</td>
-    <td class="amount">${fmt(totNet)}</td>
-  </tr>` : '';
-
-  $('#payroll-summary').innerHTML = `
-    <div class="payroll-summary-item"><div class="val">${employees.length}</div><div class="lbl">عدد الموظفين</div></div>
-    <div class="payroll-summary-item"><div class="val">${fmt(totBonus + totAllow)}</div><div class="lbl">إجمالي الحوافز والبدلات</div></div>
-    <div class="payroll-summary-item"><div class="val">${fmt(totAdv + totDed)}</div><div class="lbl">إجمالي السلف والخصومات</div></div>
-    <div class="payroll-summary-item"><div class="val" style="color:var(--success)">${fmt(totNet)}</div><div class="lbl">صافي المستحقات</div></div>`;
+  refreshPayrollNumbers();
 }
 
 function updatePayrollField(empId, field, value) {
@@ -685,8 +668,52 @@ function updatePayrollField(empId, field, value) {
     rec[field] = Number(value || 0);
   }
   saveData(DB_KEYS.PAYROLL, payrollData);
-  renderPayroll();
+  // نُحدِّث خلايا الحساب والإجماليات فقط دون إعادة بناء الجدول كاملاً،
+  // حتى لا يفقد المستخدم التركيز أو تُمسح مدخلات الحقول المجاورة.
+  refreshPayrollNumbers();
   toast('تم حفظ التعديل ✅');
+}
+
+// إعادة حساب وتحديث الأرقام الظاهرة في مسير الرواتب (خلايا الصف + صف الإجمالي + الملخص)
+// دون إعادة بناء حقول الإدخال نفسها.
+function refreshPayrollNumbers() {
+  const mk = getSelectedMonth('payroll');
+  const md = payrollData[mk] || {};
+  let totBase = 0, totGross = 0, totPieces = 0, totPieceVal = 0, totBonus = 0, totAllow = 0, totAdv = 0, totDed = 0, totTax = 0, totNet = 0;
+
+  employees.forEach(e => {
+    const c = calcEmployeeNet(e, md[e.id]);
+    totBase += c.base; totGross += c.gross; totPieces += c.pieces; totPieceVal += c.pieceTotal;
+    totBonus += c.bonus; totAllow += c.allowance; totAdv += c.advance; totDed += c.deduction; totTax += c.tax; totNet += c.net;
+
+    const tr = document.querySelector(`#payroll-body tr[data-emp="${e.id}"]`);
+    if (!tr) return;
+    const pt = tr.querySelector('.cell-piecetotal'); if (pt) pt.textContent = fmt(c.pieceTotal);
+    const gr = tr.querySelector('.cell-gross');       if (gr) gr.textContent = fmt(c.gross);
+    const tx = tr.querySelector('.cell-tax');         if (tx) tx.textContent = fmt(c.tax);
+    const nt = tr.querySelector('.cell-net');         if (nt) nt.textContent = fmt(c.net);
+  });
+
+  // صف الإجمالي
+  $('#payroll-footer').innerHTML = employees.length ? `<tr>
+    <td colspan="3">الإجمالي</td>
+    <td class="amount">${fmt(totBase)}</td>
+    <td class="pay-total-count">${totPieces}</td><td></td>
+    <td class="amount">${fmt(totPieceVal)}</td>
+    <td class="amount">${fmt(totGross)}</td><td></td><td class="amount">${fmt(totTax)}</td>
+    <td class="amount">${fmt(totBonus)}</td>
+    <td class="amount">${fmt(totAllow)}</td>
+    <td class="amount">${fmt(totAdv)}</td>
+    <td class="amount">${fmt(totDed)}</td>
+    <td class="amount">${fmt(totNet)}</td>
+  </tr>` : '';
+
+  // الملخص
+  $('#payroll-summary').innerHTML = `
+    <div class="payroll-summary-item"><div class="val">${employees.length}</div><div class="lbl">عدد الموظفين</div></div>
+    <div class="payroll-summary-item"><div class="val">${fmt(totBonus + totAllow)}</div><div class="lbl">إجمالي الحوافز والبدلات</div></div>
+    <div class="payroll-summary-item"><div class="val">${fmt(totAdv + totDed)}</div><div class="lbl">إجمالي السلف والخصومات</div></div>
+    <div class="payroll-summary-item"><div class="val" style="color:var(--success)">${fmt(totNet)}</div><div class="lbl">صافي المستحقات</div></div>`;
 }
 
 function printPayroll() {
@@ -1030,7 +1057,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=2.5').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=2.6').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
