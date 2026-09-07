@@ -14,12 +14,13 @@ let employees = loadData(DB_KEYS.EMPLOYEES);
 let expenses  = loadData(DB_KEYS.EXPENSES);
 let settings  = loadData(DB_KEYS.SETTINGS, {
   companyName: 'مؤسستي', taxNumber: '', phone: '', address: '',
-  currency: 'ر.س', monthlyIncome: 0
+  currency: 'ر.س', monthlyIncome: 0, logo: ''
 });
 let payrollData = loadData(DB_KEYS.PAYROLL, {}); // { "2026-09": { empId: {pieces, bonus, allowance, advance, deduction} } }
 
 let confirmCallback = null;
 let deferredInstallPrompt = null;
+let pendingCompanyLogo = null;
 
 // ============ أدوات مساعدة ============
 const $  = s => document.querySelector(s);
@@ -118,14 +119,34 @@ function renderDashboard() {
     </tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#999;padding:2rem">لا يوجد موظفون بعد — أضف أول موظف!</td></tr>';
 }
 
+function toggleEmployeeActions(id) {
+  const menu = document.querySelector(`[data-employee-actions="${id}"]`);
+  if (!menu) return;
+  $$('.employee-actions-menu.open').forEach(m => { if (m !== menu) m.classList.remove('open'); });
+  menu.classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.employee-name-wrap')) $$('.employee-actions-menu.open').forEach(m => m.classList.remove('open'));
+});
+
 // ============ الموظفون ============
 function renderEmployees() {
   const q = ($('#employee-search').value || '').trim();
   const list = employees.filter(e => !q || e.name.includes(q) || e.title.includes(q));
   $('#employees-table').innerHTML = list.length ? list.map(e => {
-    const c = calcEmployeeNet(e);
+    const c = calcEmployeeNet(e, payrollData[curMonthKey()]?.[e.id]);
     return `<tr>
-      <td><strong>${esc(e.name)}</strong></td>
+      <td>
+        <div class="employee-name-wrap">
+          <button class="employee-name-button" onclick="toggleEmployeeActions('${e.id}')" title="إضافة حركة مالية"><strong>${esc(e.name)}</strong><span>⌄</span></button>
+          <div class="employee-actions-menu" data-employee-actions="${e.id}">
+            <button onclick="openEmployeeTransaction('${e.id}','advance')">💸 سلفة</button>
+            <button onclick="openEmployeeTransaction('${e.id}','deduction')">➖ خصم</button>
+            <button onclick="openEmployeeTransaction('${e.id}','bonus')">🎁 حافز</button>
+          </div>
+        </div>
+      </td>
       <td>${esc(e.title)}</td>
       <td><span class="badge badge-${e.type}">${e.type === 'piece' ? '🔢 بالقطعة' : '📅 شهري'}</span></td>
       <td class="amount">${e.type === 'piece' ? fmt(e.piecePrice) + '/قطعة' : fmt(e.salary)}</td>
@@ -139,6 +160,40 @@ function renderEmployees() {
       </td>
     </tr>`;
   }).join('') : '<tr><td colspan="9" style="text-align:center;color:#999;padding:2rem">لا توجد نتائج</td></tr>';
+}
+
+function openEmployeeTransaction(empId, type = 'advance') {
+  const emp = employees.find(e => e.id === empId);
+  if (!emp) return;
+  $('#transaction-employee-id').value = empId;
+  $('#transaction-type').value = type;
+  $('#transaction-amount').value = '';
+  $('#transaction-note').value = '';
+  $('#employee-transaction-title').textContent = `${type === 'advance' ? 'سلفة' : type === 'deduction' ? 'خصم' : 'حافز'} — ${emp.name}`;
+  const menu = document.querySelector(`[data-employee-actions="${empId}"]`);
+  if (menu) menu.classList.remove('open');
+  openModal('employee-transaction-modal');
+  setTimeout(() => $('#transaction-amount').focus(), 100);
+}
+
+function saveEmployeeTransaction() {
+  const empId = $('#transaction-employee-id').value;
+  const type = $('#transaction-type').value;
+  const amount = Number($('#transaction-amount').value || 0);
+  if (!empId || !amount || amount < 0) { toast('يرجى إدخال مبلغ صحيح', 'error'); return; }
+  const mk = curMonthKey();
+  if (!payrollData[mk]) payrollData[mk] = {};
+  if (!payrollData[mk][empId]) payrollData[mk][empId] = {};
+  const record = payrollData[mk][empId];
+  record[type] = Number(record[type] || 0) + amount;
+  record.transactions = record.transactions || [];
+  record.transactions.push({ type, amount, note: $('#transaction-note').value.trim(), createdAt: new Date().toISOString() });
+  saveData(DB_KEYS.PAYROLL, payrollData);
+  closeModal('employee-transaction-modal');
+  renderEmployees(); renderDashboard();
+  if ($('#page-payroll').classList.contains('active')) renderPayroll();
+  if ($('#page-reports').classList.contains('active')) renderReports();
+  toast(`تمت إضافة ${type === 'advance' ? 'السلفة' : type === 'deduction' ? 'الخصم' : 'الحافز'} ✅`);
 }
 
 function openEmployeeModal(id = null) {
@@ -448,6 +503,39 @@ function loadSettingsForm() {
   $('#set-address').value = settings.address || '';
   $('#set-currency').value = settings.currency || 'ر.س';
   $('#set-monthly-income').value = settings.monthlyIncome || 0;
+  pendingCompanyLogo = null;
+  updateCompanyBranding();
+}
+
+function previewCompanyLogo(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    pendingCompanyLogo = e.target.result;
+    $('#company-logo-preview').src = pendingCompanyLogo;
+    $('#company-logo-preview').style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeCompanyLogo() {
+  pendingCompanyLogo = '';
+  $('#company-logo-preview').src = '';
+  $('#company-logo-preview').style.display = 'none';
+  $('#set-company-logo').value = '';
+}
+
+function updateCompanyBranding() {
+  const logo = pendingCompanyLogo !== null ? pendingCompanyLogo : (settings.logo || '');
+  ['company-logo-preview', 'report-logo'].forEach(id => {
+    const img = $('#' + id);
+    if (!img) return;
+    img.src = logo;
+    img.style.display = logo ? '' : 'none';
+  });
+  const sidebarLogo = $('#sidebar-logo');
+  if (sidebarLogo) sidebarLogo.innerHTML = logo ? `<img class="sidebar-logo-image" src="${esc(logo)}" alt="شعار المؤسسة">` : '💼';
 }
 
 function saveSettings() {
@@ -457,9 +545,12 @@ function saveSettings() {
     phone: $('#set-phone').value.trim(),
     address: $('#set-address').value.trim(),
     currency: $('#set-currency').value,
-    monthlyIncome: Number($('#set-monthly-income').value || 0)
+    monthlyIncome: Number($('#set-monthly-income').value || 0),
+    logo: pendingCompanyLogo !== null ? pendingCompanyLogo : (settings.logo || '')
   };
   saveData(DB_KEYS.SETTINGS, settings);
+  pendingCompanyLogo = null;
+  updateCompanyBranding();
   renderDashboard();
   toast('تم حفظ الإعدادات ✅');
 }
@@ -521,7 +612,9 @@ function clearAllData() {
     localStorage.removeItem(DB_KEYS.SETTINGS);
     localStorage.removeItem(DB_KEYS.PAYROLL);
     employees = []; expenses = []; payrollData = {};
-    settings = { companyName: 'مؤسستي', taxNumber: '', phone: '', address: '', currency: 'ر.س', monthlyIncome: 0 };
+    settings = { companyName: 'مؤسستي', taxNumber: '', phone: '', address: '', currency: 'ر.س', monthlyIncome: 0, logo: '' };
+    pendingCompanyLogo = null;
+    updateCompanyBranding();
     renderDashboard();
     toast('تم مسح جميع البيانات', 'warning');
   });
@@ -552,6 +645,7 @@ if ('serviceWorker' in navigator) {
 // ============ التهيئة ============
 document.addEventListener('DOMContentLoaded', () => {
   fillMonthYearSelectors();
+  updateCompanyBranding();
   const d = new Date();
   const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
   $('#header-date').textContent = `${days[d.getDay()]}، ${d.toLocaleDateString('ar-EG')}`;

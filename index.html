@@ -33,7 +33,7 @@
 <!-- القائمة الجانبية -->
 <nav id="sidebar">
   <div class="sidebar-header">
-    <div class="sidebar-logo">💼</div>
+    <div class="sidebar-logo" id="sidebar-logo">💼</div>
     <h2>النظام المالي</h2>
   </div>
   <ul class="sidebar-menu">
@@ -204,7 +204,8 @@
     </div>
 
     <div class="report-container" id="report-container">
-      <div class="report-header">
+        <div class="report-header">
+        <img id="report-logo" class="company-logo report-logo" alt="شعار المؤسسة" style="display:none">
         <h2>التقرير المالي الشهري</h2>
         <p id="report-period"></p>
       </div>
@@ -269,12 +270,22 @@
             <option value="د.ك">دينار كويتي (د.ك)</option>
             <option value="ج.م">جنيه مصري (ج.م)</option>
             <option value="د.أ">دينار أردني (د.أ)</option>
+            <option value="ر.ي">ريال يمني (ر.ي)</option>
             <option value="$">دولار أمريكي ($)</option>
           </select>
         </div>
         <div class="form-group">
           <label>الإيراد الشهري التقديري</label>
           <input type="number" id="set-monthly-income" class="form-input" min="0">
+        </div>
+        <div class="form-group full-width">
+          <label>شعار المؤسسة</label>
+          <input type="file" id="set-company-logo" class="form-input" accept="image/png,image/jpeg,image/webp" onchange="previewCompanyLogo(this)">
+          <div class="logo-upload-row">
+            <img id="company-logo-preview" class="company-logo" alt="معاينة شعار المؤسسة" style="display:none">
+            <button type="button" class="btn btn-outline btn-sm" onclick="removeCompanyLogo()">إزالة الشعار</button>
+          </div>
+          <small class="form-help">اختر صورة PNG أو JPG أو WebP، وسيتم حفظها على هذا الجهاز.</small>
         </div>
       </div>
       <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
@@ -427,6 +438,41 @@
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('expense-modal')">إلغاء</button>
       <button class="btn btn-primary" onclick="saveExpense()">💾 حفظ النفقة</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة إضافة حركة مالية للموظف -->
+<div class="modal" id="employee-transaction-modal">
+  <div class="modal-content modal-small">
+    <div class="modal-header">
+      <h3 id="employee-transaction-title">إضافة حركة مالية</h3>
+      <button class="modal-close" onclick="closeModal('employee-transaction-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="transaction-employee-id">
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label>نوع الحركة</label>
+          <select id="transaction-type" class="form-select">
+            <option value="advance">سلفة (تخصم من الراتب)</option>
+            <option value="deduction">خصم (يخصم من الراتب)</option>
+            <option value="bonus">حافز (يزيد الراتب)</option>
+          </select>
+        </div>
+        <div class="form-group full-width">
+          <label>المبلغ</label>
+          <input type="number" id="transaction-amount" class="form-input" min="0" step="0.01" required>
+        </div>
+        <div class="form-group full-width">
+          <label>ملاحظة (اختياري)</label>
+          <input type="text" id="transaction-note" class="form-input" placeholder="سبب الحركة المالية">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('employee-transaction-modal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveEmployeeTransaction()">💾 حفظ الحركة</button>
     </div>
   </div>
 </div>

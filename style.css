@@ -92,6 +92,7 @@ body {
   text-align: center;
 }
 .sidebar-logo { font-size: 2.5rem; margin-bottom: 0.5rem; }
+.sidebar-logo-image { width: 64px; height: 64px; object-fit: contain; border-radius: 12px; background: #fff; padding: 4px; }
 .sidebar-header h2 { font-size: 1.1rem; font-weight: 600; }
 
 .sidebar-menu { flex: 1; list-style: none; padding: 1rem 0; overflow-y: auto; }
@@ -214,6 +215,24 @@ body {
 .amount-positive { color: var(--success); }
 .amount-negative { color: var(--danger); }
 
+.employee-name-wrap { position: relative; display: inline-block; }
+.employee-name-button {
+  display: inline-flex; align-items: center; gap: 0.4rem; border: 0; background: transparent;
+  color: var(--primary); font: inherit; cursor: pointer; padding: 0.25rem 0;
+}
+.employee-name-button:hover { color: var(--primary-light); text-decoration: underline; }
+.employee-actions-menu {
+  position: absolute; right: 0; top: calc(100% + 0.25rem); z-index: 20; display: none;
+  min-width: 160px; background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow-lg); padding: 0.35rem;
+}
+.employee-actions-menu.open { display: flex; flex-direction: column; }
+.employee-actions-menu button {
+  border: 0; background: transparent; color: var(--text); text-align: right; padding: 0.55rem 0.7rem;
+  border-radius: 7px; cursor: pointer; font: inherit; white-space: nowrap;
+}
+.employee-actions-menu button:hover { background: #e8eaf6; color: var(--primary); }
+
 /* ===== الأزرار ===== */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
@@ -281,6 +300,10 @@ body {
 }
 .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); }
 textarea.form-input { resize: vertical; }
+.form-help { display: block; color: var(--text-light); margin-top: 0.4rem; font-size: 0.78rem; }
+.logo-upload-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+.company-logo { width: 72px; height: 72px; object-fit: contain; border: 1px solid var(--border); border-radius: 10px; background: #fff; padding: 4px; }
+.report-logo { display: block; margin: 0 auto 0.75rem; width: 86px; height: 86px; }
 
 .radio-group { display: flex; gap: 1rem; flex-wrap: wrap; }
 .radio-label {
