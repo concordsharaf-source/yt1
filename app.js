@@ -30,7 +30,8 @@ const $$ = s => document.querySelectorAll(s);
 
 function fmt(n) {
   const cur = settings.currency || 'ر.س';
-  return (Number(n) || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 }) + ' ' + cur;
+  // أرقام إنجليزية (غربية/لاتينية) في كل التطبيق
+  return (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ' + cur;
 }
 function monthKey(y, m) { return `${y}-${String(m).padStart(2,'0')}`; }
 function curMonthKey() { const d = new Date(); return monthKey(d.getFullYear(), d.getMonth() + 1); }
@@ -815,7 +816,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.6').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.7').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
@@ -831,7 +832,9 @@ document.addEventListener('DOMContentLoaded', () => {
   updateCompanyBranding();
   const d = new Date();
   const days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
-  $('#header-date').textContent = `${days[d.getDay()]}، ${d.toLocaleDateString('ar-EG')}`;
+  const arabicMonths = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  // أرقام إنجليزية (لاتينية) في التاريخ مع أسماء اليوم والشهر بالعربية
+  $('#header-date').textContent = `${days[d.getDay()]}، ${d.getDate()} ${arabicMonths[d.getMonth()]} ${d.getFullYear()}`;
   renderDashboard();
   setTimeout(() => $('#splash').classList.add('hide'), 1200);
 });

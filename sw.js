@@ -1,5 +1,5 @@
 /* Service Worker - نظام إدارة الموظفين */
-const CACHE_NAME = 'ems-v1.6';
+const CACHE_NAME = 'ems-v1.7';
 const ASSETS = [
   './',
   './index.html',
