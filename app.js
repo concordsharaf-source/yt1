@@ -315,7 +315,7 @@ function fillMonthYearSelectors() {
   const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
   ['payroll','expense','revenue','report'].forEach(p => {
     const ms = $(`#${p}-month`), ys = $(`#${p}-year`);
-    if (!ms) return;
+    if (!ms || !ys) return;
     ms.innerHTML = months.map((m, i) => `<option value="${i+1}" ${i === now.getMonth() ? 'selected' : ''}>${m}</option>`).join('');
     ys.innerHTML = years.map(y => `<option value="${y}" ${y === now.getFullYear() ? 'selected' : ''}>${y}</option>`).join('');
   });
@@ -727,7 +727,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.3').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
