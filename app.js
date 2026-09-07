@@ -86,7 +86,8 @@ const pageTitles = {
 };
 
 function showPage(page) {
-  if (hasUnsavedChanges && !window.confirm('لديك تغييرات غير محفوظة. هل تريد مغادرة الصفحة؟')) return;
+  const currentPage = $('.page.active')?.id?.replace('page-', '');
+  if (currentPage && currentPage !== page && !window.confirm('هل أنت متأكد من الخروج من الصفحة الحالية؟')) return;
   hasUnsavedChanges = false;
   $$('.page').forEach(p => p.classList.remove('active'));
   $('#page-' + page).classList.add('active');
@@ -104,7 +105,6 @@ function showPage(page) {
 }
 
 window.addEventListener('beforeunload', e => {
-  if (!hasUnsavedChanges) return;
   e.preventDefault();
   e.returnValue = '';
 });
@@ -748,7 +748,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.4').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.5').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
