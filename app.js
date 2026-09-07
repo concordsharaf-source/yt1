@@ -249,9 +249,55 @@ document.addEventListener('click', e => {
 });
 
 // ============ الموظفون ============
+// حالة الفرز في قائمة الموظفين: الحقل (name|salary|hire) والاتجاه (1 تصاعدي | -1 تنازلي)
+let empSortField = 'name';
+let empSortDir   = 1;
+
+function empSortValue(e) {
+  if (empSortField === 'name') return { v: e.name || '', missing: false };
+  if (empSortField === 'salary') return { v: Number(e.type === 'monthly' ? e.salary : e.piecePrice || 0) || 0, missing: false };
+  // hire (تاريخ التعيين)
+  return { v: e.hireDate || '', missing: !e.hireDate };
+}
+
+function getSortedEmployees(list) {
+  const f = empSortField, dir = empSortDir;
+  return [...list].sort((a, b) => {
+    const A = empSortValue(a), B = empSortValue(b);
+    // مَن بلا تاريخ تعيين يأتي دائماً آخر
+    if (f === 'hire' && (A.missing || B.missing)) {
+      if (A.missing && B.missing) return 0;
+      return A.missing ? 1 : -1;
+    }
+    let r;
+    if (f === 'name') {
+      r = String(A.v).localeCompare(String(B.v), 'ar');
+    } else {
+      r = (A.v < B.v) ? -1 : (A.v > B.v ? 1 : 0);
+    }
+    return r * dir;
+  });
+}
+
+function applyEmpSortUI() {
+  const names = { name: 'الاسم', salary: 'الراتب', hire: 'تاريخ التعيين' };
+  $$('#employee-sort-toolbar .sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === empSortField));
+  $('#emp-sort-dir').textContent = empSortDir === 1 ? '↑ تصاعدي' : '↓ تنازلي';
+}
+
+function toggleEmpSort(field) {
+  if (empSortField === field) empSortDir *= -1;
+  else { empSortField = field; empSortDir = 1; }
+  applyEmpSortUI();
+  renderEmployees();
+}
+function toggleEmpSortDir() { empSortDir *= -1; applyEmpSortUI(); renderEmployees(); }
+
 function renderEmployees() {
   const q = ($('#employee-search').value || '').trim();
-  const list = employees.filter(e => !q || e.name.includes(q) || e.title.includes(q));
+  const filtered = employees.filter(e => !q || e.name.includes(q) || e.title.includes(q));
+  const list = getSortedEmployees(filtered);
+  applyEmpSortUI();
   $('#employees-table').innerHTML = list.length ? list.map(e => {
     const c = calcEmployeeNet(e, payrollData[curMonthKey()]?.[e.id]);
     return `<tr>
@@ -281,6 +327,33 @@ function renderEmployees() {
       </td>
     </tr>`;
   }).join('') : '<tr><td colspan="12" style="text-align:center;color:#999;padding:2rem">لا توجد نتائج</td></tr>';
+}
+
+// اختيار جهة اتصال من الهاتف وملء رقم الهاتف في نموذج الموظف
+function pickPhoneContact() {
+  try {
+    if (!navigator.contacts || !navigator.contacts.select) {
+      toast('اختيار جهات الاتصال غير مدعوم في هذا المتصفح — أدخل الرقم يدوياً', 'warning');
+      return;
+    }
+    const want = ['tel'];
+    if (navigator.contacts.properties && navigator.contacts.properties.includes('name')) want.push('name');
+    navigator.contacts.select(want, { multiple: false }).then(contacts => {
+      if (!contacts || !contacts.length) return;
+      const c = contacts[0];
+      if (c.telephoneNumbers && c.telephoneNumbers[0]) {
+        $('#emp-phone').value = c.telephoneNumbers[0];
+      }
+      if (c.name && !$('#emp-name').value.trim()) $('#emp-name').value = c.name;
+      toast('تم جلب بيانات جهة الاتصال ✅');
+    }).catch(err => {
+      // المستخدم ألغى الاختيار → لا رسالة
+      if (err && err.name === 'NotFoundError') return;
+      toast('تعذّر الوصول لجهات الاتصال', 'error');
+    });
+  } catch (e) {
+    toast('اختيار جهات الاتصال غير متاح في هذا المتصفح', 'warning');
+  }
 }
 
 function openEmployeeTransaction(empId, type = 'advance') {
@@ -838,7 +911,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.9').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=2.0').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;

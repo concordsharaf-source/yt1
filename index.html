@@ -124,6 +124,15 @@
       <button class="btn btn-primary" onclick="openEmployeeModal()">➕ إضافة موظف</button>
     </div>
     <div class="card">
+      <div class="sort-toolbar" id="employee-sort-toolbar">
+        <span class="sort-label">فرز حسب:</span>
+        <div class="sort-btns">
+          <button type="button" class="sort-btn" data-sort="name" onclick="toggleEmpSort('name')">الاسم</button>
+          <button type="button" class="sort-btn" data-sort="salary" onclick="toggleEmpSort('salary')">الراتب</button>
+          <button type="button" class="sort-btn" data-sort="hire" onclick="toggleEmpSort('hire')">تاريخ التعيين</button>
+        </div>
+        <button type="button" class="sort-dir-btn" id="emp-sort-dir" onclick="toggleEmpSortDir()" title="ترتيب">↑ تصاعدي</button>
+      </div>
       <div class="table-responsive">
         <table class="data-table">
           <thead>
@@ -360,7 +369,10 @@
         </div>
         <div class="form-group">
           <label>رقم الهاتف</label>
-          <input type="tel" id="emp-phone" class="form-input">
+          <div class="phone-wrap">
+            <input type="tel" id="emp-phone" class="form-input" dir="ltr" placeholder="05xxxxxxxx">
+            <button type="button" class="phone-pick-btn" id="emp-phone-pick" title="اختيار من جهات اتصال الهاتف" onclick="pickPhoneContact()">👤</button>
+          </div>
         </div>
         <div class="form-group">
           <label>تاريخ التعيين</label>

@@ -314,6 +314,35 @@ body {
   background: #fff;
   transition: border-color 0.2s;
 }
+/* خانة رقم الهاتف مع زر جهات الاتصال */
+.phone-wrap { position: relative; }
+.phone-wrap .form-input { padding-inline-start: 3rem; }
+.phone-pick-btn {
+  position: absolute; inset-inline-start: 6px; top: 50%; transform: translateY(-50%);
+  width: 2.4rem; height: 2.4rem; border: 0; border-radius: 8px;
+  background: #e8eaf6; color: var(--primary); font-size: 1.2rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.phone-pick-btn:active { background: var(--primary); }
+
+/* شريط فرز قائمة الموظفين */
+.sort-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: #fafafa;
+}
+.sort-label { font-size: 0.85rem; font-weight: 600; color: var(--text-light); }
+.sort-btns { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.sort-btn, .sort-dir-btn {
+  border: 1px solid var(--border); background: #fff; color: var(--text);
+  border-radius: 8px; padding: 0.45rem 0.8rem; font: inherit; font-size: 0.85rem; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+}
+.sort-btn:hover { border-color: var(--primary); color: var(--primary); }
+.sort-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.sort-dir-btn { background: var(--primary); color: #fff; border-color: var(--primary); min-width: 96px; justify-content: center; }
+.sort-dir-btn:hover { background: var(--primary-light); }
 .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); }
 textarea.form-input { resize: vertical; }
 .form-help { display: block; color: var(--text-light); margin-top: 0.4rem; font-size: 0.78rem; }
