@@ -58,23 +58,31 @@ function calcEmployeeNet(emp, monthData = {}) {
   const installmentCount = Math.min(10, Math.max(0, Number(md.installments ?? 0)));
   const legacyDeduction = Number(md.deduction ?? 0);
   const taxRate   = Math.min(100, Math.max(0, Number(md.taxRate ?? emp.taxRate ?? 0)));
+  const taxFrac   = taxRate / 100;
+  const keepFrac  = 1 - taxFrac; // الجزء الذي يبقى للموظف بعد الضريبة
 
-  let base = 0, pieces = 0, pieceTotal = 0;
+  let base = 0, pieces = 0, pieceTotal = 0, gross = 0;
   if (emp.type === 'piece') {
+    // عامل بالقطعة: سعر القطعة يُعدّ قبل الضريبة (يبقى كما هو)
     pieces     = Number(md.pieces ?? 0);
     pieceTotal = pieces * Number(emp.piecePrice || 0);
     base = pieceTotal;
+    gross = base + bonus + allowance;
   } else {
-    base = Number(emp.salary || 0);
-    pieces = Number(md.extraPieces ?? 0);
+    // موظف شهري: الراتب المكتوب = صافي بعد الضريبة (ما يستلمه الموظف فعلًا).
+    // يُستخرج منه المبلغ قبل الضريبة = صافي ÷ (1 - نسبة الضريبة)
+    const netSalary = Number(emp.salary || 0);
+    const grossedSalary = keepFrac > 0 ? netSalary / keepFrac : 0;
+    pieces     = Number(md.extraPieces ?? 0);
     pieceTotal = pieces * Number(emp.piecePrice || 0);
-    base += pieceTotal;
+    base = netSalary + pieceTotal;
+    gross = grossedSalary + pieceTotal + bonus + allowance;
   }
+
   const deduction = emp.type === 'monthly' && installmentCount > 0
     ? (Number(emp.salary || 0) / 30) * installmentCount
     : legacyDeduction;
-  const gross = base + bonus + allowance;
-  const tax = gross * taxRate / 100;
+  const tax = gross * taxFrac;
   const afterTax = gross - tax;
   const net   = afterTax - advance - deduction;
   return { base, pieces, pieceTotal, bonus, allowance, advance, deduction, installmentCount, taxRate, gross, tax, afterTax, net };
@@ -339,7 +347,7 @@ function updateNetPreview() {
   const c = calcEmployeeNet(emp);
   $('#emp-net-preview').textContent = type === 'piece'
     ? `صافي المستحق (بدون احتساب القطع): ${fmt(c.net)} — سيُضاف (القطع × ${fmt(emp.piecePrice)})`
-    : `صافي الراتب المتوقع: ${fmt(c.net)}`;
+    : `الراتب المكتوب صافٍ بعد الضريبة. قبل الضريبة: ${fmt(c.gross)} — ما يستلمه الموظف: ${fmt(c.net)}`;
 }
 
 ['emp-salary','emp-piece-price','emp-tax-rate','emp-bonus','emp-allowance'].forEach(id => {
@@ -816,7 +824,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.7').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.8').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;
