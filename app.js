@@ -22,6 +22,7 @@ let payrollData = loadData(DB_KEYS.PAYROLL, {}); // { "2026-09": { empId: {piece
 let confirmCallback = null;
 let deferredInstallPrompt = null;
 let pendingCompanyLogo = null;
+let hasUnsavedChanges = false;
 
 // ============ أدوات مساعدة ============
 const $  = s => document.querySelector(s);
@@ -85,6 +86,8 @@ const pageTitles = {
 };
 
 function showPage(page) {
+  if (hasUnsavedChanges && !window.confirm('لديك تغييرات غير محفوظة. هل تريد مغادرة الصفحة؟')) return;
+  hasUnsavedChanges = false;
   $$('.page').forEach(p => p.classList.remove('active'));
   $('#page-' + page).classList.add('active');
   $$('.sidebar-menu a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
@@ -99,6 +102,19 @@ function showPage(page) {
   if (page === 'settings')  loadSettingsForm();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+window.addEventListener('beforeunload', e => {
+  if (!hasUnsavedChanges) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
+document.addEventListener('input', e => {
+  if (e.target.closest('.modal') || e.target.closest('#page-settings')) hasUnsavedChanges = true;
+});
+document.addEventListener('change', e => {
+  if (e.target.closest('.modal') || e.target.closest('#page-settings')) hasUnsavedChanges = true;
+});
 
 function toggleSidebar() {
   $('#sidebar').classList.toggle('open');
@@ -209,6 +225,7 @@ function saveEmployeeTransaction() {
   record.transactions.push({ type, amount, note: $('#transaction-note').value.trim(), createdAt: new Date().toISOString() });
   saveData(DB_KEYS.PAYROLL, payrollData);
   closeModal('employee-transaction-modal');
+  hasUnsavedChanges = false;
   renderEmployees(); renderDashboard();
   if ($('#page-payroll').classList.contains('active')) renderPayroll();
   if ($('#page-reports').classList.contains('active')) renderReports();
@@ -291,6 +308,7 @@ function saveEmployee() {
   if (idx >= 0) employees[idx] = emp; else employees.push(emp);
   saveData(DB_KEYS.EMPLOYEES, employees);
   closeModal('employee-modal');
+  hasUnsavedChanges = false;
   renderEmployees(); renderDashboard();
   toast(idx >= 0 ? 'تم تحديث بيانات الموظف ✅' : 'تمت إضافة الموظف بنجاح ✅');
 }
@@ -457,6 +475,7 @@ function saveExpense() {
   if (idx >= 0) expenses[idx] = ex; else expenses.push(ex);
   saveData(DB_KEYS.EXPENSES, expenses);
   closeModal('expense-modal');
+  hasUnsavedChanges = false;
   renderExpenses(); renderDashboard();
   toast(idx >= 0 ? 'تم تحديث النفقة ✅' : 'تمت إضافة النفقة ✅');
 }
@@ -512,6 +531,7 @@ function saveRevenue() {
   if (idx >= 0) revenues[idx] = rev; else revenues.push(rev);
   saveData(DB_KEYS.REVENUES, revenues);
   closeModal('revenue-modal');
+  hasUnsavedChanges = false;
   renderRevenues(); renderDashboard();
   if ($('#page-reports').classList.contains('active')) renderReports();
   toast(idx >= 0 ? 'تم تحديث بند الإيراد ✅' : 'تمت إضافة الإيراد ✅');
@@ -635,6 +655,7 @@ function saveSettings() {
     logo: pendingCompanyLogo !== null ? pendingCompanyLogo : (settings.logo || '')
   };
   saveData(DB_KEYS.SETTINGS, settings);
+  hasUnsavedChanges = false;
   pendingCompanyLogo = null;
   updateCompanyBranding();
   renderDashboard();
@@ -727,7 +748,7 @@ function installApp() {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js?v=1.3').then(reg => reg.update()).catch(() => {});
+    navigator.serviceWorker.register('sw.js?v=1.4').then(reg => reg.update()).catch(() => {});
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (window.__emsReloadedForUpdate) return;
       window.__emsReloadedForUpdate = true;

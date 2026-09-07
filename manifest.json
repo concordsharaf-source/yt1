@@ -4,7 +4,7 @@
   "description": "نظام متكامل لإدارة الموظفين والرواتب والنفقات التشغيلية",
   "start_url": "./index.html",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#1a237e",
   "theme_color": "#1a237e",
   "lang": "ar",
