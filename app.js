@@ -53,7 +53,8 @@ function calcEmployeeNet(emp, monthData = {}) {
   const bonus     = Number(md.bonus     ?? emp.bonus     ?? 0);
   const allowance = Number(md.allowance ?? emp.allowance ?? 0);
   const advance   = Number(md.advance   ?? emp.advance   ?? 0);
-  const deduction = Number(md.deduction ?? emp.deduction ?? 0);
+  const installmentCount = Math.min(10, Math.max(0, Number(md.installments ?? emp.installments ?? 0)));
+  const legacyDeduction = Number(md.deduction ?? emp.deduction ?? 0);
   const taxRate   = Math.min(100, Math.max(0, Number(md.taxRate ?? emp.taxRate ?? 0)));
 
   let base = 0, pieces = 0, pieceTotal = 0;
@@ -67,11 +68,14 @@ function calcEmployeeNet(emp, monthData = {}) {
     pieceTotal = pieces * Number(emp.piecePrice || 0);
     base += pieceTotal;
   }
+  const deduction = emp.type === 'monthly' && installmentCount > 0
+    ? (Number(emp.salary || 0) / 30) * installmentCount
+    : legacyDeduction;
   const gross = base + bonus + allowance;
   const tax = gross * taxRate / 100;
   const afterTax = gross - tax;
   const net   = afterTax - advance - deduction;
-  return { base, pieces, pieceTotal, bonus, allowance, advance, deduction, taxRate, gross, tax, afterTax, net };
+  return { base, pieces, pieceTotal, bonus, allowance, advance, deduction, installmentCount, taxRate, gross, tax, afterTax, net };
 }
 
 // ============ التنقل ============
@@ -224,6 +228,7 @@ function openEmployeeModal(id = null) {
   $('#emp-tax-rate').value = emp?.taxRate ?? 0;
   $('#emp-advance').value = emp?.advance ?? 0;
   $('#emp-deduction').value = emp?.deduction ?? 0;
+  $('#emp-installments').value = emp?.installments ?? 0;
   $('#emp-bonus').value = emp?.bonus ?? 0;
   $('#emp-allowance').value = emp?.allowance ?? 0;
   $('#emp-notes').value = emp?.notes || '';
@@ -254,6 +259,7 @@ function updateNetPreview() {
     allowance: Number($('#emp-allowance').value || 0),
     advance: Number($('#emp-advance').value || 0),
     deduction: Number($('#emp-deduction').value || 0),
+    installments: type === 'monthly' ? Number($('#emp-installments').value || 0) : 0,
   };
   const c = calcEmployeeNet(emp);
   $('#emp-net-preview').textContent = type === 'piece'
@@ -261,7 +267,7 @@ function updateNetPreview() {
     : `صافي الراتب المتوقع: ${fmt(c.net)}`;
 }
 
-['emp-salary','emp-piece-price','emp-tax-rate','emp-bonus','emp-allowance','emp-advance','emp-deduction'].forEach(id => {
+['emp-salary','emp-piece-price','emp-tax-rate','emp-bonus','emp-allowance','emp-advance','emp-deduction','emp-installments'].forEach(id => {
   document.addEventListener('input', e => { if (e.target.id === id) updateNetPreview(); });
 });
 
@@ -281,6 +287,7 @@ function saveEmployee() {
     taxRate: Math.min(100, Math.max(0, Number($('#emp-tax-rate').value || 0))),
     advance: Number($('#emp-advance').value || 0),
     deduction: Number($('#emp-deduction').value || 0),
+    installments: type === 'monthly' ? Math.min(10, Math.max(0, Number($('#emp-installments').value || 0))) : 0,
     bonus: Number($('#emp-bonus').value || 0),
     allowance: Number($('#emp-allowance').value || 0),
     notes: $('#emp-notes').value.trim(),
@@ -344,6 +351,9 @@ function renderPayroll() {
     const pieceCell = `<td><input type="number" min="0" class="form-input payroll-input" value="${d[pieceField] ?? ''}" placeholder="0" onchange="updatePayrollField('${e.id}','${pieceField}',this.value)"></td>
          <td class="amount">${fmt(e.piecePrice)}</td>
          <td class="amount">${fmt(c.pieceTotal)}</td>`;
+    const deductionCell = e.type === 'monthly'
+      ? `<select class="form-select payroll-input" onchange="updatePayrollField('${e.id}','installments',this.value)">${[0,1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}" ${(d.installments ?? e.installments ?? 0) == n ? 'selected' : ''}>${n === 0 ? 'بدون قسط' : n + ' قسط'}</option>`).join('')}</select>`
+      : `<input type="number" min="0" class="form-input payroll-input" value="${d.deduction ?? e.deduction ?? 0}" onchange="updatePayrollField('${e.id}','deduction',this.value)">`;
 
     return `<tr>
       <td>${i + 1}</td>
@@ -357,7 +367,7 @@ function renderPayroll() {
       <td><input type="number" min="0" class="form-input payroll-input" value="${d.bonus ?? e.bonus ?? 0}" onchange="updatePayrollField('${e.id}','bonus',this.value)"></td>
       <td><input type="number" min="0" class="form-input payroll-input" value="${d.allowance ?? e.allowance ?? 0}" onchange="updatePayrollField('${e.id}','allowance',this.value)"></td>
       <td><input type="number" min="0" class="form-input payroll-input" value="${d.advance ?? e.advance ?? 0}" onchange="updatePayrollField('${e.id}','advance',this.value)"></td>
-      <td><input type="number" min="0" class="form-input payroll-input" value="${d.deduction ?? e.deduction ?? 0}" onchange="updatePayrollField('${e.id}','deduction',this.value)"></td>
+      <td>${deductionCell}</td>
       <td class="amount" style="color:var(--primary);font-weight:700">${fmt(c.net)}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="15" style="text-align:center;color:#999;padding:2rem">لا يوجد موظفون — أضف موظفين أولاً</td></tr>';
