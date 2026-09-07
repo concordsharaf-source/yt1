@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a237e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>نظام إدارة الموظفين والرواتب</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- شاشة البداية -->
+<div id="splash">
+  <div class="splash-inner">
+    <div class="splash-logo">💼</div>
+    <h1>نظام إدارة الموظفين</h1>
+    <p>الرواتب • الحسابات • النفقات</p>
+  </div>
+</div>
+
+<!-- الهيدر -->
+<header id="app-header">
+  <div class="header-content">
+    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+    <h1 id="page-title">لوحة التحكم</h1>
+    <div class="header-date" id="header-date"></div>
+  </div>
+</header>
+
+<!-- القائمة الجانبية -->
+<nav id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">💼</div>
+    <h2>النظام المالي</h2>
+  </div>
+  <ul class="sidebar-menu">
+    <li><a href="#" onclick="showPage('dashboard');return false" class="active" data-page="dashboard">📊 لوحة التحكم</a></li>
+    <li><a href="#" onclick="showPage('employees');return false" data-page="employees">👥 الموظفون</a></li>
+    <li><a href="#" onclick="showPage('payroll');return false" data-page="payroll">💰 مسير الرواتب</a></li>
+    <li><a href="#" onclick="showPage('expenses');return false" data-page="expenses">🧾 النفقات التشغيلية</a></li>
+    <li><a href="#" onclick="showPage('reports');return false" data-page="reports">📈 التقارير المالية</a></li>
+    <li><a href="#" onclick="showPage('settings');return false" data-page="settings">⚙️ الإعدادات</a></li>
+  </ul>
+  <div class="sidebar-footer">
+    <button class="btn btn-danger btn-block" onclick="exportAllData()">📥 تصدير نسخة احتياطية</button>
+    <button class="btn btn-outline btn-block" onclick="document.getElementById('import-file').click()">📤 استيراد بيانات</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(this)">
+  </div>
+</nav>
+<div id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- المحتوى الرئيسي -->
+<main id="main-content">
+
+  <!-- لوحة التحكم -->
+  <section id="page-dashboard" class="page active">
+    <div class="stats-grid">
+      <div class="stat-card stat-blue">
+        <div class="stat-icon">👥</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-employees">0</div>
+          <div class="stat-label">إجمالي الموظفين</div>
+        </div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-icon">💰</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-salaries">0</div>
+          <div class="stat-label">رواتب الشهر الحالي</div>
+        </div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-icon">🧾</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-expenses">0</div>
+          <div class="stat-label">نفقات الشهر الحالي</div>
+        </div>
+      </div>
+      <div class="stat-card stat-purple">
+        <div class="stat-icon">📈</div>
+        <div class="stat-info">
+          <div class="stat-value" id="stat-net">0</div>
+          <div class="stat-label">صافي الربح التقديري</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>⚡ إجراءات سريعة</h3>
+      </div>
+      <div class="quick-actions">
+        <button class="btn btn-primary" onclick="showPage('employees');openEmployeeModal()">➕ إضافة موظف</button>
+        <button class="btn btn-success" onclick="showPage('payroll')">💵 مسير الرواتب</button>
+        <button class="btn btn-warning" onclick="showPage('expenses');openExpenseModal()">🧾 إضافة نفقة</button>
+        <button class="btn btn-info" onclick="showPage('reports')">📊 التقارير</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3>📋 آخر 5 موظفين</h3>
+        <button class="btn btn-sm btn-outline" onclick="showPage('employees')">عرض الكل</button>
+      </div>
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr><th>الاسم</th><th>المسمى الوظيفي</th><th>النوع</th><th>الراتب/القطعة</th></tr>
+          </thead>
+          <tbody id="recent-employees"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- الموظفون -->
+  <section id="page-employees" class="page">
+    <div class="page-actions">
+      <input type="text" class="search-input" id="employee-search" placeholder="🔍 بحث عن موظف..." oninput="renderEmployees()">
+      <button class="btn btn-primary" onclick="openEmployeeModal()">➕ إضافة موظف</button>
+    </div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>الاسم</th><th>المسمى الوظيفي</th><th>النوع</th><th>الراتب الأساسي</th>
+              <th>السلف</th><th>الخصومات</th><th>الحوافز</th><th>صافي الراتب</th><th>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="employees-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- مسير الرواتب -->
+  <section id="page-payroll" class="page">
+    <div class="page-actions">
+      <select id="payroll-month" class="form-select" onchange="renderPayroll()"></select>
+      <select id="payroll-year" class="form-select" onchange="renderPayroll()"></select>
+      <button class="btn btn-success" onclick="printPayroll()">🖨️ طباعة مسير الرواتب</button>
+    </div>
+    <div class="card">
+      <div class="payroll-summary" id="payroll-summary"></div>
+      <div class="table-responsive">
+        <table class="data-table" id="payroll-table">
+          <thead>
+            <tr>
+              <th>#</th><th>الاسم</th><th>النوع</th><th>الأساسي</th>
+              <th>القطع</th><th>سعر القطعة</th><th>إجمالي القطع</th>
+              <th>حوافز</th><th>بدلات</th><th>سلف</th><th>خصومات</th><th>صافي المستحق</th>
+            </tr>
+          </thead>
+          <tbody id="payroll-body"></tbody>
+          <tfoot id="payroll-footer"></tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- النفقات -->
+  <section id="page-expenses" class="page">
+    <div class="page-actions">
+      <select id="expense-month" class="form-select" onchange="renderExpenses()"></select>
+      <select id="expense-year" class="form-select" onchange="renderExpenses()"></select>
+      <button class="btn btn-primary" onclick="openExpenseModal()">➕ إضافة نفقة</button>
+    </div>
+    <div class="stats-grid stats-3">
+      <div class="stat-card stat-red">
+        <div class="stat-icon">💸</div>
+        <div class="stat-info"><div class="stat-value" id="expense-total">0</div><div class="stat-label">إجمالي النفقات</div></div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-icon">📋</div>
+        <div class="stat-info"><div class="stat-value" id="expense-count">0</div><div class="stat-label">عدد العمليات</div></div>
+      </div>
+      <div class="stat-card stat-blue">
+        <div class="stat-icon">🏷️</div>
+        <div class="stat-info"><div class="stat-value" id="expense-categories">0</div><div class="stat-label">عدد الفئات</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr><th>التاريخ</th><th>الفئة</th><th>الوصف</th><th>المبلغ</th><th>ملاحظات</th><th>إجراءات</th></tr>
+          </thead>
+          <tbody id="expenses-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- التقارير -->
+  <section id="page-reports" class="page">
+    <div class="page-actions">
+      <select id="report-month" class="form-select" onchange="renderReports()"></select>
+      <select id="report-year" class="form-select" onchange="renderReports()"></select>
+      <button class="btn btn-success" onclick="printReport()">🖨️ طباعة التقرير</button>
+    </div>
+
+    <div class="report-container" id="report-container">
+      <div class="report-header">
+        <h2>التقرير المالي الشهري</h2>
+        <p id="report-period"></p>
+      </div>
+
+      <div class="report-section">
+        <h3>📥 الإيرادات</h3>
+        <div class="report-row"><span>إجمالي الإيرادات المسجلة:</span><strong id="rep-income">0</strong></div>
+      </div>
+
+      <div class="report-section">
+        <h3>💼 تفاصيل الرواتب</h3>
+        <div class="report-row"><span>عدد الموظفين:</span><strong id="rep-emp-count">0</strong></div>
+        <div class="report-row"><span>إجمالي الرواتب الأساسية:</span><strong id="rep-base-salaries">0</strong></div>
+        <div class="report-row"><span>إجمالي الحوافز:</span><strong id="rep-bonuses">0</strong></div>
+        <div class="report-row"><span>إجمالي البدلات:</span><strong id="rep-allowances">0</strong></div>
+        <div class="report-row"><span>إجمالي السلف:</span><strong id="rep-advances">0</strong></div>
+        <div class="report-row"><span>إجمالي الخصومات:</span><strong id="rep-deductions">0</strong></div>
+        <div class="report-row total-row"><span>صافي الرواتب المستحقة:</span><strong id="rep-net-salaries">0</strong></div>
+      </div>
+
+      <div class="report-section">
+        <h3>🧾 تفاصيل النفقات التشغيلية</h3>
+        <div id="rep-expense-details"></div>
+        <div class="report-row total-row"><span>إجمالي النفقات التشغيلية:</span><strong id="rep-total-expenses">0</strong></div>
+      </div>
+
+      <div class="report-section report-final">
+        <h3>📊 صافي الربح / الخسارة</h3>
+        <div class="report-row"><span>إجمالي الإيرادات:</span><strong id="rep-final-income">0</strong></div>
+        <div class="report-row"><span>إجمالي المصروفات (رواتب + نفقات):</span><strong id="rep-final-expenses">0</strong></div>
+        <div class="report-row total-row grand-total"><span>صافي الربح:</span><strong id="rep-final-net">0</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- الإعدادات -->
+  <section id="page-settings" class="page">
+    <div class="card">
+      <div class="card-header"><h3>🏢 بيانات المؤسسة</h3></div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>اسم المؤسسة</label>
+          <input type="text" id="set-company-name" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>الرقم الضريبي</label>
+          <input type="text" id="set-tax-number" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>رقم الهاتف</label>
+          <input type="text" id="set-phone" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>العنوان</label>
+          <input type="text" id="set-address" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>العملة</label>
+          <select id="set-currency" class="form-select">
+            <option value="ر.س">ريال سعودي (ر.س)</option>
+            <option value="د.إ">درهم إماراتي (د.إ)</option>
+            <option value="د.ك">دينار كويتي (د.ك)</option>
+            <option value="ج.م">جنيه مصري (ج.م)</option>
+            <option value="د.أ">دينار أردني (د.أ)</option>
+            <option value="$">دولار أمريكي ($)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>الإيراد الشهري التقديري</label>
+          <input type="number" id="set-monthly-income" class="form-input" min="0">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()">💾 حفظ الإعدادات</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>💾 إدارة البيانات</h3></div>
+      <div class="quick-actions">
+        <button class="btn btn-success" onclick="exportAllData()">📥 تصدير نسخة احتياطية</button>
+        <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">📤 استيراد بيانات</button>
+        <button class="btn btn-danger" onclick="clearAllData()">🗑️ مسح جميع البيانات</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3>📱 تثبيت التطبيق</h3></div>
+      <p>لتثبيت التطبيق على جوالك:</p>
+      <ol class="install-steps">
+        <li><strong>أندرويد (Chrome):</strong> اضغط على قائمة النقاط ⋮ ثم "إضافة إلى الشاشة الرئيسية"</li>
+        <li><strong>آيفون (Safari):</strong> اضغط على زر المشاركة ⎋ ثم "إضافة إلى الشاشة الرئيسية"</li>
+      </ol>
+      <button class="btn btn-primary" id="install-btn" style="display:none" onclick="installApp()">📲 تثبيت التطبيق الآن</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- نافذة إضافة/تعديل موظف -->
+<div class="modal" id="employee-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="employee-modal-title">إضافة موظف جديد</h3>
+      <button class="modal-close" onclick="closeModal('employee-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="emp-id">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>الاسم الكامل *</label>
+          <input type="text" id="emp-name" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>المسمى الوظيفي *</label>
+          <input type="text" id="emp-title" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>رقم الهاتف</label>
+          <input type="tel" id="emp-phone" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>تاريخ التعيين</label>
+          <input type="date" id="emp-hire-date" class="form-input">
+        </div>
+        <div class="form-group full-width">
+          <label>نوع التوظيف *</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="emp-type" value="monthly" checked onchange="toggleEmpType()">
+              <span>📅 راتب شهري ثابت</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="emp-type" value="piece" onchange="toggleEmpType()">
+              <span>🔢 بالقطعة (حسب الإنتاج)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="group-monthly-salary">
+          <label>الراتب الشهري الأساسي *</label>
+          <input type="number" id="emp-salary" class="form-input" min="0" step="0.01">
+        </div>
+        <div class="form-group" id="group-piece-price" style="display:none">
+          <label>سعر القطعة *</label>
+          <input type="number" id="emp-piece-price" class="form-input" min="0" step="0.01">
+        </div>
+
+        <div class="form-group">
+          <label>السلف (المستقطع من الراتب)</label>
+          <input type="number" id="emp-advance" class="form-input" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+          <label>الخصومات الأخرى</label>
+          <input type="number" id="emp-deduction" class="form-input" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+          <label>الحوافز</label>
+          <input type="number" id="emp-bonus" class="form-input" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-group">
+          <label>بدلات أخرى (سكن/مواصلات...)</label>
+          <input type="number" id="emp-allowance" class="form-input" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-group full-width">
+          <label>ملاحظات</label>
+          <textarea id="emp-notes" class="form-input" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="net-preview" id="emp-net-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('employee-modal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveEmployee()">💾 حفظ الموظف</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة إضافة نفقة -->
+<div class="modal" id="expense-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="expense-modal-title">إضافة نفقة تشغيلية</h3>
+      <button class="modal-close" onclick="closeModal('expense-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="exp-id">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>التاريخ *</label>
+          <input type="date" id="exp-date" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label>الفئة *</label>
+          <select id="exp-category" class="form-select">
+            <option value="إيجار">🏠 إيجار</option>
+            <option value="كهرباء">⚡ كهرباء</option>
+            <option value="ماء">💧 ماء</option>
+            <option value="إنترنت واتصالات">📶 إنترنت واتصالات</option>
+            <option value="صيانة">🔧 صيانة</option>
+            <option value="قرطاسية ومستلزمات">📎 قرطاسية ومستلزمات</option>
+            <option value="وقود ومواصلات">⛽ وقود ومواصلات</option>
+            <option value="تسويق وإعلان">📣 تسويق وإعلان</option>
+            <option value="رواتب إضافية">👔 رواتب إضافية</option>
+            <option value="أخرى">📦 أخرى</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>الوصف *</label>
+          <input type="text" id="exp-description" class="form-input" placeholder="مثال: فاتورة الكهرباء لشهر..." required>
+        </div>
+        <div class="form-group">
+          <label>المبلغ *</label>
+          <input type="number" id="exp-amount" class="form-input" min="0" step="0.01" required>
+        </div>
+        <div class="form-group full-width">
+          <label>ملاحظات</label>
+          <textarea id="exp-notes" class="form-input" rows="2"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('expense-modal')">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveExpense()">💾 حفظ النفقة</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة تأكيد -->
+<div class="modal" id="confirm-modal">
+  <div class="modal-content modal-small">
+    <div class="modal-header">
+      <h3>تأكيد العملية</h3>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message">هل أنت متأكد؟</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('confirm-modal')">إلغاء</button>
+      <button class="btn btn-danger" id="confirm-btn" onclick="executeConfirm()">تأكيد</button>
+    </div>
+  </div>
+</div>
+
+<!-- إشعارات -->
+<div id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
